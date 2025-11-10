@@ -1,0 +1,309 @@
+---
+title: "Fragenstellung 7"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(ggplot2)
+```
+
+##Wie ist das Arbeitspensum unter verschiedenen Personen aufgeteilt, basierend auf Geschlecht und Beziehungsstatus?
+
+```{r}
+# 1. CSV-Datei einlesen
+daten <- zp_2021 <- read.csv("/Volumes/ExterneHDD/ced1/data/ced1_data/strukturerhebung/2021_SE_RS_CSV/zp_2021.csv", sep=";")
+
+# 2. Gewünschte Spalten auswählen
+df_new <- daten[, c("CLASSOFMARITALSTATUS", "SEX", "CURRACTIVITYSTATUSII")]
+
+# 2. Für den Plot recodieren wir hier SEX und CURRACTIVITYSTATUSII als Faktor, um die Beschriftung im Plot übersichtlich zu gestalten.
+# Hinweis: Die Umkodierung hier dient nur der grafischen Darstellung.
+df_new <- daten %>% 
+  mutate(
+    SEX = factor(SEX, levels = c(1, 2), labels = c("Männer", "Frauen")),
+    CURRACTIVITYSTATUSII = factor(CURRACTIVITYSTATUSII, levels = 1:9,
+      labels = c("Vollzeiterwerbstätige (90-100%)",
+                 "Teilzeiterwerbstätige I (70-89%)",
+                 "Teilzeiterwerbstätige II (50-69%)",
+                 "Teilzeiterwerbstätige III (weniger als 50%)",
+                 "Erwerbslose",
+                 "Nichterwerbspersonen in Ausbildung",
+                 "Hausfrauen/Hausmänner",
+                 "Rentner/innen (AHV, IV)",
+                 "Andere Nichterwerbspersonen"))
+  )
+
+# 3. Es werden nur Männer und Frauen berücksichtigt:
+daten_filtered <- df_new %>% 
+  filter(SEX %in% c("Männer", "Frauen"))
+
+# 4. Berechnung der Prozentanteile pro Geschlecht für jede Kategorie von CURRACTIVITYSTATUSII
+df_percent <- daten_filtered %>%
+  group_by(SEX, CURRACTIVITYSTATUSII) %>%
+  summarise(count = n(), .groups = "drop_last") %>%
+  group_by(SEX) %>%
+  mutate(percent = count / sum(count) * 100) %>%
+  ungroup()
+
+# 5. Plot mit ggplot2 erstellen: Balkendiagramm, facettiert nach Geschlecht
+ggplot(df_percent, aes(x = CURRACTIVITYSTATUSII, y = percent, fill = SEX)) +
+  geom_col() +
+  facet_wrap(~ SEX) +
+  labs(
+    title = "Verteilung der Arbeitspensen in Prozent",
+    x = "Arbeitspensum (Kodierung)",
+    y = "Prozent (%)"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "none")
+```
+
+Im dargestellten Plot ist deutlich zu erkennen, dass Frauen wesentlich häufiger in einem Teilzeitpensum unter 50 % erwerbstätig sind als Männer. Dieses Ungleichgewicht unterstreicht ein nach wie vor präsentes, traditionelles Rollenverständnis: Männer sind mit einem Vorsprung von über 20 Prozent deutlich häufiger in Vollzeitanstellungen vertreten.
+
+Diese Tendenz weist darauf hin, dass Männer nach wie vor stärker als Hauptverdiener in Erscheinung treten, während Frauen zwar ebenfalls erwerbstätig sind, jedoch häufiger in reduzierten Arbeitspensen tätig sind. Dieses Muster legt nahe, dass Frauen in vielen Fällen neben ihrer Berufstätigkeit weiterhin einen größeren Teil der unbezahlten Care-Arbeit – etwa Kinderbetreuung oder Haushalt – übernehmen.
+
+In den folgenden Plots wird sich diese Verteilung weiter untermauern lassen. Es zeigt sich ein klar reproduziertes Rollenbild: Der Mann als Vollzeit-Erwerbstätiger, die Frau als ergänzende Arbeitskraft mit Teilzeitpensum und verstärkter Verantwortung im häuslichen Bereich.
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# 1. CSV-Datei einlesen
+daten <- read.csv("/Volumes/ExterneHDD/ced1/data/ced1_data/strukturerhebung/2021_SE_RS_CSV/zp_2021.csv", sep=";")
+
+# 2. Variablen auswählen und recodieren
+df_new <- daten %>%
+  select(CLASSOFMARITALSTATUS, SEX, CURRACTIVITYSTATUSII, CURRACTIVITY_MULTI) %>%
+  mutate(
+    SEX = factor(SEX, levels = c(1, 2), labels = c("Männer", "Frauen")),
+    CURRACTIVITYSTATUSII = factor(CURRACTIVITYSTATUSII, levels = 1:9,
+                                  labels = c("Vollzeiterwerbstätige (90-100%)",
+                                             "Teilzeiterwerbstätige I (70-89%)",
+                                             "Teilzeiterwerbstätige II (50-69%)",
+                                             "Teilzeiterwerbstätige III (weniger als 50%)",
+                                             "Erwerbslose",
+                                             "Nichterwerbspersonen in Ausbildung",
+                                             "Hausfrauen/Hausmänner",
+                                             "Rentner/innen (AHV, IV)",
+                                             "Andere Nichterwerbspersonen")),
+    CURRACTIVITY_MULTI = factor(CURRACTIVITY_MULTI, levels = c(0, 1), labels = c("Nur 1 Job", "Mehrere Jobs"))
+  ) %>%
+  filter(SEX %in% c("Männer", "Frauen"))
+
+# 3. Prozentanteile für Kombinationen berechnen
+df_percent_multi <- df_new %>%
+  group_by(SEX, CURRACTIVITYSTATUSII, CURRACTIVITY_MULTI) %>%
+  summarise(count = n(), .groups = "drop_last") %>%
+  group_by(SEX, CURRACTIVITYSTATUSII) %>%
+  mutate(percent = count / sum(count) * 100) %>%
+  ungroup()
+
+# 4. Plot erstellen
+ggplot(df_percent_multi, aes(x = CURRACTIVITYSTATUSII, y = percent, fill = CURRACTIVITY_MULTI)) +
+  geom_col(position = "dodge") +
+  facet_wrap(~ SEX) +
+  labs(
+    title = "Anteil mehrerer Erwerbstätigkeiten nach Arbeitspensum und Geschlecht",
+    x = "Arbeitspensum",
+    y = "Prozent (%)",
+    fill = "Mehrere Erwerbstätigkeiten"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Verteilung der Arbeitspensen nach Geschlecht
+
+Die erste Grafik zeigt die prozentuale Verteilung verschiedener Arbeitspensen, getrennt nach Geschlecht. Es wird deutlich, dass Männer signifikant häufiger in einem Vollzeitpensum (90–100 %) tätig sind, während Frauen deutlich häufiger Teilzeit arbeiten – insbesondere in Pensen unter 50 %.
+
+Diese geschlechtsspezifische Verteilung bestätigt die bekannte Tendenz, dass Frauen häufiger in reduzierten Arbeitsverhältnissen stehen. Die zusätzliche Unterscheidung, ob Personen einen oder mehrere Jobs ausüben, liefert in diesem Kontext jedoch nur begrenzt aussagekräftige Informationen. Es kann nicht eindeutig differenziert werden, ob beispielsweise eine Person mit mehreren Teilzeitstellen ein Vollzeitäquivalent erreicht oder tatsächlich nur geringfügig erwerbstätig ist. Daher bleibt diese Angabe im Hinblick auf die Analyse der Arbeitszeitverteilung eher nachrangig.
+
+
+```{r}
+# tidyverse laden
+library(tidyverse)
+
+# 1. CSV-Datei einlesen
+daten <- read.csv("/Volumes/ExterneHDD/ced1/data/ced1_data/strukturerhebung/2021_SE_RS_CSV/zp_2021.csv", sep = ";")
+
+# 2. Gewünschte Spalten auswählen und recoden:
+#    - SEX: 1 = Männer, 2 = Frauen
+#    - CURRACTIVITYSTATUSII: mit den von dir angegebenen Labels
+#    - Neue Variable marital: CLASSOFMARITALSTATUS == 2 -> "Verheiratet", ansonsten "Ledig"
+df_new <- daten %>%
+  select(CLASSOFMARITALSTATUS, SEX, CURRACTIVITYSTATUSII) %>%
+  mutate(
+    SEX = factor(SEX, levels = c(1, 2), labels = c("Männer", "Frauen")),
+    CURRACTIVITYSTATUSII = factor(CURRACTIVITYSTATUSII, levels = 1:9,
+      labels = c("Vollzeiterwerbstätige (90-100%)",
+                 "Teilzeiterwerbstätige I (70-89%)",
+                 "Teilzeiterwerbstätige II (50-69%)",
+                 "Teilzeiterwerbstätige III (weniger als 50%)",
+                 "Erwerbslose",
+                 "Nichterwerbspersonen in Ausbildung",
+                 "Hausfrauen/Hausmänner",
+                 "Rentner/innen (AHV, IV)",
+                 "Andere Nichterwerbspersonen")),
+    marital = if_else(CLASSOFMARITALSTATUS == 2, "Verheiratet", "Ledig")
+  ) %>%
+  # Nur Fälle mit Geschlecht "Männer" und "Frauen" berücksichtigen
+  filter(SEX %in% c("Männer", "Frauen"))
+
+# 3. Berechnung der Prozentanteile:
+#    Zuerst gruppieren wir nach Geschlecht, Arbeitspensum und marital, dann berechnen wir
+#    innerhalb jeder Kombination (SEX & CURRACTIVITYSTATUSII) den prozentualen Anteil der marital-Gruppen.
+df_percent <- df_new %>%
+  group_by(SEX, CURRACTIVITYSTATUSII, marital) %>%
+  summarise(count = n(), .groups = "drop_last") %>%
+  group_by(SEX, CURRACTIVITYSTATUSII) %>%
+  mutate(percent = count / sum(count) * 100) %>%
+  ungroup()
+
+# 4. Plot erstellen:
+#    Die Balken werden nach CURRACTIVITYSTATUSII auf der x-Achse gruppiert.
+#    Mit fill = marital werden sie farblich unterschieden: "Verheiratet" in rot, "Ledig" in grün.
+#    facet_wrap erzeugt separate Panels für Männer und Frauen.
+ggplot(df_percent, aes(x = CURRACTIVITYSTATUSII, y = percent, fill = marital)) +
+  geom_col(position = "dodge") +
+  facet_wrap(~ SEX) +
+  scale_fill_manual(values = c("Verheiratet" = "red", "Ledig" = "green")) +
+  labs(
+    title = "Arbeitspensum in Prozent nach Geschlecht und Familienstatus",
+    x = "Arbeitspensum (CURRACTIVITYSTATUSII)",
+    y = "Prozent (%)"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+
+Arbeitspensum nach Geschlecht und Beziehungsstatus
+
+Die zweite Grafik differenziert die prozentualen Anteile des Arbeitspensums zusätzlich nach Beziehungsstatus (verheiratet oder ledig). Dabei zeigt sich, dass verheiratete Personen, insbesondere Männer, häufiger Vollzeit tätig sind als alleinstehende Personen. Bei Frauen hingegen fällt der Unterschied geringer aus, wobei verheiratete Frauen tendenziell ein höheres Arbeitspensum aufweisen als ledige. Diese Ergebnisse verdeutlichen den Einfluss des Familienstatus auf das Erwerbsverhalten von Männern und Frauen.
+
+
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# Daten einlesen
+daten_zp <- read.csv("/Volumes/ExterneHDD/ced1/data/ced1_data/strukturerhebung/2021_SE_RS_CSV/zp_2021.csv", sep = ";")
+daten_hh <- read.csv("/Volumes/ExterneHDD/ced1/data/ced1_data/strukturerhebung/2021_SE_RS_CSV/hh_2021.csv", sep = ";")
+
+# Datensätze zusammenführen und Variable für Anzahl Kinder erstellen
+daten_joined <- daten_zp %>%
+  inner_join(daten_hh %>% 
+               select(HOUSEHOLDYEARLYID, HH_COUNTOF00_04, HH_COUNTOF05_15, HH_COUNTOF16_19),
+             by = "HOUSEHOLDYEARLYID") %>%
+  mutate(
+    HH_COUNTOF0_19 = HH_COUNTOF00_04 + HH_COUNTOF05_15 + HH_COUNTOF16_19,
+    Kindergruppe = case_when(
+      HH_COUNTOF0_19 == 0 ~ " keine Kinder",
+      HH_COUNTOF0_19 == 1 ~ "1 Kind",
+      HH_COUNTOF0_19 == 2 ~ "2 Kinder",
+      HH_COUNTOF0_19 == 3 ~ "3 Kinder",
+      HH_COUNTOF0_19 > 3  ~ "Mehr als 3 Kinder",
+    ),
+    SEX = factor(SEX, levels = c(1,2), labels = c("Männer", "Frauen")),
+    CURRACTIVITYSTATUSII = factor(CURRACTIVITYSTATUSII, levels = 1:9,
+                                  labels = c("Vollzeiterwerbstätige (90-100%)",
+                                             "Teilzeiterwerbstätige I (70-89%)",
+                                             "Teilzeiterwerbstätige II (50-69%)",
+                                             "Teilzeiterwerbstätige III (<50%)",
+                                             "Erwerbslose",
+                                             "In Ausbildung",
+                                             "Hausfrauen/Hausmänner",
+                                             "Rentner/innen",
+                                             "Andere Nichterwerbspersonen"))
+  ) %>%
+  filter(Kindergruppe != "Keine Kinder", SEX %in% c("Männer", "Frauen"))
+
+# Prozentuale Anteile berechnen
+daten_prozent <- daten_joined %>%
+  group_by(SEX, Kindergruppe, CURRACTIVITYSTATUSII) %>%
+  summarise(Anzahl = n(), .groups = "drop_last") %>%
+  mutate(Prozent = Anzahl / sum(Anzahl) * 100) %>%
+  ungroup()
+
+# Plot erstellen
+ggplot(daten_prozent, aes(x = Kindergruppe, y = Prozent, fill = CURRACTIVITYSTATUSII)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ SEX) +
+  labs(title = "Arbeitspensum nach Anzahl der Kinder und Geschlecht",
+       x = "Anzahl der Kinder im Haushalt",
+       y = "Prozentanteil (%)",
+       fill = "Arbeitspensum") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# Daten einlesen
+daten_zp <- read.csv("/Volumes/ExterneHDD/ced1/data/ced1_data/strukturerhebung/2021_SE_RS_CSV/zp_2021.csv", sep = ";")
+daten_hh <- read.csv("/Volumes/ExterneHDD/ced1/data/ced1_data/strukturerhebung/2021_SE_RS_CSV/hh_2021.csv", sep = ";")
+
+# Daten verbinden, Variablen erstellen
+daten_joined <- daten_zp %>%
+  inner_join(daten_hh %>% 
+               select(HOUSEHOLDYEARLYID, HH_COUNTOF00_04, HH_COUNTOF05_15, HH_COUNTOF16_19),
+             by = "HOUSEHOLDYEARLYID") %>%
+  mutate(
+    HH_COUNTOF0_19 = HH_COUNTOF00_04 + HH_COUNTOF05_15 + HH_COUNTOF16_19,
+    Kindergruppe = case_when(
+      HH_COUNTOF0_19 == 0 ~ "Keine Kinder",
+      HH_COUNTOF0_19 == 1 ~ "1 Kind",
+      HH_COUNTOF0_19 == 2 ~ "2 Kinder",
+      HH_COUNTOF0_19 == 3 ~ "3 Kinder",
+      HH_COUNTOF0_19 > 3  ~ "Mehr als 3 Kinder",
+      TRUE ~ NA_character_
+    ),
+    marital = case_when(
+      CLASSOFMARITALSTATUS == 2 ~ "Verheiratet / eingetragene Partnerschaft",
+      CLASSOFMARITALSTATUS %in% c(1,3,4) ~ "Alleinstehend",
+      TRUE ~ NA_character_
+    ),
+    SEX = factor(SEX, levels = c(1,2), labels = c("Männer", "Frauen")),
+    CURRACTIVITYSTATUSII = factor(CURRACTIVITYSTATUSII, levels = 1:9,
+                                  labels = c("Vollzeiterwerbstätige (90-100%)",
+                                             "Teilzeiterwerbstätige I (70-89%)",
+                                             "Teilzeiterwerbstätige II (50-69%)",
+                                             "Teilzeiterwerbstätige III (<50%)",
+                                             "Erwerbslose",
+                                             "In Ausbildung",
+                                             "Hausfrauen/Hausmänner",
+                                             "Rentner/innen",
+                                             "Andere Nichterwerbspersonen"))
+  ) %>%
+  filter(!is.na(Kindergruppe), !is.na(marital), SEX %in% c("Männer", "Frauen"))
+
+# Reihenfolge der Kindergruppen festlegen
+daten_joined$Kindergruppe <- factor(
+  daten_joined$Kindergruppe,
+  levels = c("Keine Kinder", "1 Kind", "2 Kinder", "3 Kinder", "Mehr als 3 Kinder")
+)
+
+# Prozentuale Anteile berechnen
+daten_prozent <- daten_joined %>%
+  group_by(SEX, marital, Kindergruppe, CURRACTIVITYSTATUSII) %>%
+  summarise(Anzahl = n(), .groups = "drop_last") %>%
+  mutate(Prozent = Anzahl / sum(Anzahl) * 100) %>%
+  ungroup()
+
+# Plot erstellen
+ggplot(daten_prozent, aes(x = Kindergruppe, y = Prozent, fill = CURRACTIVITYSTATUSII)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_grid(marital ~ SEX) +
+  labs(title = "Arbeitspensum nach Anzahl der Kinder, Geschlecht und Beziehungsstatus",
+       subtitle = "Verheiratet/eingetragene Partnerschaft vs. Alleinstehend (ledig, verwitwet, geschieden)",
+       x = "Anzahl der Kinder im Haushalt",
+       y = "Prozentanteil (%)",
+       fill = "Arbeitspensum") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```

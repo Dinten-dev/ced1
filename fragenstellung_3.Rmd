@@ -1,0 +1,256 @@
+---
+title: "Fragenstellung 3"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(reshape)
+
+source('../scripts/all_zp_data.R')
+source('../scripts/all_hh_data.R')
+```
+
+```{r}
+# bind all zp data since 2015 (Codes diff before that)
+zp_2015 <- zp_2015 %>% select(TIMEWORKEDPERWEEKSUM, STATUSINEMPL_DETAIL, HOUSEHOLDYEARLYID, SEX, AGE)
+zp_2016 <- zp_2016 %>% select(TIMEWORKEDPERWEEKSUM, STATUSINEMPL_DETAIL, HOUSEHOLDYEARLYID, SEX, AGE)
+zp_2017 <- zp_2017 %>% select(TIMEWORKEDPERWEEKSUM, STATUSINEMPL_DETAIL, HOUSEHOLDYEARLYID, SEX, AGE)
+zp_2018 <- zp_2018 %>% select(TIMEWORKEDPERWEEKSUM, STATUSINEMPL_DETAIL, HOUSEHOLDYEARLYID, SEX, AGE)
+zp_2019 <- zp_2019 %>% select(TIMEWORKEDPERWEEKSUM, STATUSINEMPL_DETAIL, HOUSEHOLDYEARLYID, SEX, AGE)
+zp_2020 <- zp_2020 %>% select(TIMEWORKEDPERWEEKSUM, STATUSINEMPL_DETAIL, HOUSEHOLDYEARLYID, SEX, AGE)
+zp_2021 <- zp_2021 %>% select(TIMEWORKEDPERWEEKSUM, STATUSINEMPL_DETAIL, HOUSEHOLDYEARLYID, SEX, AGE)
+
+zp_all_data <-zp_2015 %>%
+  bind_rows(zp_2016) %>%
+  bind_rows(zp_2017) %>%
+  bind_rows(zp_2018) %>%
+  bind_rows(zp_2019) %>%
+  bind_rows(zp_2020) %>%
+  bind_rows(zp_2021)
+```
+
+```{r}
+# bind all data hh
+hh_2015 <- hh_2015 %>% select(HH_COUNTOF00_04, HH_COUNTOF05_15, HH_COUNTOF16_19, HOUSEHOLDYEARLYID)
+hh_2016 <- hh_2016 %>% select(HH_COUNTOF00_04, HH_COUNTOF05_15, HH_COUNTOF16_19, HOUSEHOLDYEARLYID)
+hh_2017 <- hh_2017 %>% select(HH_COUNTOF00_04, HH_COUNTOF05_15, HH_COUNTOF16_19, HOUSEHOLDYEARLYID)
+hh_2018 <- hh_2018 %>% select(HH_COUNTOF00_04, HH_COUNTOF05_15, HH_COUNTOF16_19, HOUSEHOLDYEARLYID)
+hh_2019 <- hh_2019 %>% select(HH_COUNTOF00_04, HH_COUNTOF05_15, HH_COUNTOF16_19, HOUSEHOLDYEARLYID)
+hh_2020 <- hh_2020 %>% select(HH_COUNTOF00_04, HH_COUNTOF05_15, HH_COUNTOF16_19, HOUSEHOLDYEARLYID)
+hh_2021 <- hh_2021 %>% select(HH_COUNTOF00_04, HH_COUNTOF05_15, HH_COUNTOF16_19, HOUSEHOLDYEARLYID)
+
+# bind all data hh
+hh_all_data <- hh_2015 %>%
+  bind_rows(hh_2016) %>%
+  bind_rows(hh_2017) %>%
+  bind_rows(hh_2018) %>%
+  bind_rows(hh_2019) %>%
+  bind_rows(hh_2020) %>%
+  bind_rows(hh_2021)
+```
+
+
+### Fragestellung:
+### Beeinflusst die Arbeitsposition und/oder Arbeitszeit die Anzahl Kinder von einem Menschen? Gibt es Unterschiede im Geschlecht?
+
+Mehrere Studien besagen, dass die Arbeitsposition sowie die Arbeitszeit und Kinder sich gegenseitig beeinflussen.
+Eine Studie von Cukrowska-Torzewska & Matysiak (2020) zeigte, dass Frauen mit höherer beruflicher Stellung tendenziell weniger Kinder haben. Dies könnte darauf hindeuten, dass anspruchsvolle Berufe mit einer geringeren Kinderzahl verbunden sind.
+(https://link.springer.com/article/10.1007/s10680-023-09681-4)
+Eine andere Studie von Lee et al. (2019) hat festgestellt, dass beruflicher Stress Auswirkungen auf Fertilität und Kinderwunsch haben. Sie besagt das Arbeitstress bei Männern die Anzahl der Schwangerschaften im ersten Zyklus reduzierte. Daraus könnte man ziehen, dass je höher die Arbeitszeit desto höher der Arbeitsstress, was zu wenigeren Kinder führen kann.
+(https://pmc.ncbi.nlm.nih.gov/articles/PMC11812192)
+
+Genauso können Kinder die Arbeitsposition sowie Arbeitszeit beeinflussen. Laut einer Quelle reduzieren Mütter ihre Arbeitszeit signifikant nach der Geburt eines Kindes, unabhängig vom Einkommen vor der Geburt. Selbst wenn die Mutter vor der Geburt mehr verdiente, reduzierte sie ihre Arbeitszeit im Durchschnitt um 26%, während die Arbeitszeit des Vaters kaum beeinflusst wurde.
+(https://www.nuffieldfoundation.org/news/mothers-more-likely-than-fathers-to-reduce-paid-work-even-when-they-earn-more?utm_source=chatgpt.com)
+Das Bundesamt für Statistik visualisierte diese Beziehung auch. Die Erwerbstätigkeit von Frauen werden durch die Betreuung von Kindern unter 15 Jahren deutlich stärker beeinflusst als die von Männern.
+(https://www.bfs.admin.ch/bfs/de/home/statistiken/arbeit-erwerb/erwerbstaetigkeit-arbeitszeit/vereinbarkeit-unbezahlte-arbeit/vereinbarkeit-familie-beruf.html)
+
+```{r}
+# get all positions and the count from each position
+get_positions_and_count <- function(data){
+  zp_positions <- data %>%
+    filter(STATUSINEMPL_DETAIL >= 0) %>%
+    group_by(STATUSINEMPL_DETAIL) %>%
+    count(name='person_count_position') %>%
+    mutate(statusinempl_detail_str = case_when((STATUSINEMPL_DETAIL == 11) ~ '11 Selbständige mit Angestellten (keine AG oder GmbH)',
+                                     (STATUSINEMPL_DETAIL == 12) ~ '12 Selbständige ohne Angestellte (keine AG oder GmbH)',
+                                     (STATUSINEMPL_DETAIL == 20) ~ '20 Mitarbeitende Familienmitglieder',
+                                     (STATUSINEMPL_DETAIL == 31) ~ '31 Firmeneigentümer/-innen (AG oder GmbH) mit Angestellten',
+                                     (STATUSINEMPL_DETAIL == 32) ~ '32 Firmeneigentümer/-innen (AG oder GmbH) ohne Angestellte',
+                                     (STATUSINEMPL_DETAIL == 41) ~ '41 Direktoren/-innen oder Direktionsmitglieder',
+                                     (STATUSINEMPL_DETAIL == 42) ~ '42 Angestellte mit Vorgesetztenfunktion',
+                                     (STATUSINEMPL_DETAIL == 43) ~ '43 Angestellte ohne Vorgesetztenfunktion',
+                                     (STATUSINEMPL_DETAIL == 50) ~ '50 Lernende in der dualen beruflichen Grundbildung',
+                                     (STATUSINEMPL_DETAIL == 60) ~ '60 Erwerbslose',
+                                     (STATUSINEMPL_DETAIL == 70) ~ '70 Nichterwerbspersonen',
+                                      TRUE ~ NA))
+  return(zp_positions)
+}
+
+# get children count
+get_children_count <- function(data) {
+  cleaned_hh <- data %>%
+  mutate(data,
+         HH_COUNTOF00_04 = ifelse(is.na(HH_COUNTOF00_04), 0, HH_COUNTOF00_04),
+         HH_COUNTOF05_15 = ifelse(is.na(HH_COUNTOF05_15), 0, HH_COUNTOF05_15),
+         HH_COUNTOF16_19 = ifelse(is.na(HH_COUNTOF16_19), 0, HH_COUNTOF16_19))
+  return(cleaned_hh %>% mutate(children_count = HH_COUNTOF00_04 + HH_COUNTOF05_15 + HH_COUNTOF16_19))
+}
+
+prepare_data_for_plot <- function(zp_data, hh_data) {
+  positions <- get_positions_and_count(zp_data)
+  children_count <- get_children_count(hh_data)
+  
+  combined <- zp_data %>% select(STATUSINEMPL_DETAIL, HOUSEHOLDYEARLYID) %>%
+  full_join(children_count, "HOUSEHOLDYEARLYID")
+  
+  children_count_per_position <- combined %>%
+    group_by(STATUSINEMPL_DETAIL) %>%
+    summarise(total_children = sum(children_count, na.rm = TRUE))
+  
+  return(children_count_per_position %>% full_join(positions, "STATUSINEMPL_DETAIL"))
+}
+```
+
+```{r}
+create_plot <- function(plot_data, title_text) {
+  melted<-melt(
+    data.frame(
+      p=plot_data$statusinempl_detail_str,
+      Kinder=plot_data$total_children,
+      Personen=plot_data$person_count_position
+    ),
+    id="p"
+  )
+  ggplot(melted,aes(x=p,y=value,fill=variable)) + 
+    geom_bar(stat="identity",position="dodge", alpha=.3) +
+    geom_text(
+      aes(x = p, y = value, label = value, group = variable), 
+      hjust = -0.1, size = 2,
+      position = position_dodge(width = 1),
+      inherit.aes = TRUE
+    ) +
+    scale_x_discrete(labels = label_wrap_gen(width=40)) +
+    coord_flip() +
+    labs(
+      title=title_text,
+      x="Arbeitsposition",
+      y="Anzahl",
+      fill="Anzahl von:",
+    )
+  # ylim(NA, 700000) + theme_classic() + scale_y_continuous(name="Anzahl Menschen", labels = scales::comma)
+}
+```
+
+
+```{r}
+create_plot(prepare_data_for_plot(zp_2015, hh_2015), "Kinderzahl pro Arbeitsposition 2015")
+create_plot(prepare_data_for_plot(zp_2016, hh_2016), "Kinderzahl pro Arbeitsposition 2016")
+create_plot(prepare_data_for_plot(zp_2017, hh_2017), "Kinderzahl pro Arbeitsposition 2017")
+create_plot(prepare_data_for_plot(zp_2018, hh_2018), "Kinderzahl pro Arbeitsposition 2018")
+create_plot(prepare_data_for_plot(zp_2019, hh_2019), "Kinderzahl pro Arbeitsposition 2019")
+create_plot(prepare_data_for_plot(zp_2020, hh_2020), "Kinderzahl pro Arbeitsposition 2020")
+create_plot(prepare_data_for_plot(zp_2021, hh_2021), "Kinderzahl pro Arbeitsposition 2021")
+```
+
+In der oberen Grafik kann man die Anzahl Kinder für jede Arbeitsposition gut erkennen. Da die Anzahl jedoch noch nicht viel aussagt, setzen wir diese in Relation zueinander und berechnen den Prozentsatz.
+
+```{r}
+df_percentages <- position_count_and_children %>%
+  mutate(percentage = round(total_children / person_count_position * 100, digits = 2))
+
+ggplot(df_percentages, aes(reorder(factor(statusinempl_detail_str), percentage, .desc = TRUE), y=percentage, fill = percentage)) + 
+  geom_bar(stat = "identity") +
+  labs(
+    title="Prozent an Kindern pro Arbeitsposition",
+    x="Arbeitsposition",
+    y="Prozent an Kindern"
+  ) +
+  coord_flip() +
+  geom_text(
+    aes(x = statusinempl_detail_str, y = percentage, label = paste0(percentage, '%')), 
+    hjust = -0.1, size = 4,
+    position = position_dodge(width = 1),
+    inherit.aes = TRUE
+  ) +
+  ylim(NA, 200) +
+  theme_classic() +
+  theme(legend.position = "none")
+```
+In dieser Grafik kann man gut erkennen, dass die Position "Lernende in der dualen beruflichen Grundbildung im Vergleich zu den anderen Position eine extrem hohe Kinderquote hat. Dies könnte unsere Quellen bestätigen, das beruflicher Stress zu weniger Kindern führt, da die Personen in der Grundbildung wahrscheinlich noch nicht mit viel Arbeitsstress umgehen müssen. Die Quote könnte aber aufgrund der Art der Messung (Stichproben) und weil junge Menschen eventuell unvorsichtiger in einer Beziehung sind, nicht nur durch die Arbeitsposition und Arbeitszeit beeinflusst worden sein.
+Die folgenden Arbeitspositionen sind im Vergleich zu den untersten Positionen gesellschaftlich höher. Dies könnte daran liegen, dass Menschen mit genug Geld auch eher eine Familie gründen und Kinder unterstützen können.
+
+```{r}
+test <- worktime_combined %>% group_by(children_str) %>% count(name='Count')
+test2 <- worktime_combined %>% group_by(children_str) %>% dplyr::summarize(Mean = mean(TIMEWORKEDPERWEEKSUM))
+test3 <- 
+```
+
+```{r}
+# gathering mean and count for worktime in this function
+join_worktime_data <- function(data){
+    return(
+      data %>% group_by(children_str) %>% count(name='Count') %>% 
+        left_join(
+          data %>% group_by(children_str) %>% dplyr::summarize(Mean = mean(TIMEWORKEDPERWEEKSUM)),
+          by = join_by(children_str)
+      )
+    )
+}
+
+worktime_combined <- zp_all_data %>% select(TIMEWORKEDPERWEEKSUM, SEX, AGE, HOUSEHOLDYEARLYID) %>%
+  full_join(hh_children, "HOUSEHOLDYEARLYID")
+worktime_combined <- worktime_combined %>%
+      mutate(children_str = case_when(
+          children_count == 1 ~ '1 Kind',
+          children_count == 2 ~ '2 Kinder',
+          children_count == 3 ~ '3 Kinder',
+          children_count > 3 ~ 'Mehr als 3 Kinder',
+          TRUE ~ 'Keine Kinder'
+      ))
+
+mean_all_data <- join_worktime_data(
+  worktime_combined %>%
+  filter(TIMEWORKEDPERWEEKSUM >= 0)
+)
+mean_female <- join_worktime_data(
+  worktime_combined %>%
+  filter(SEX == 2) %>%
+  filter(TIMEWORKEDPERWEEKSUM >= 0)
+)
+mean_male <- join_worktime_data(
+  worktime_combined %>%
+  filter(SEX == 1) %>%
+  filter(TIMEWORKEDPERWEEKSUM >= 0)
+)
+
+barplot_worktime <- function(data, title_text, subtitle_text){
+  ggplot(data, aes(x=reorder(factor(children_str), Mean, .desc = TRUE), y=Mean, fill=Mean)) + 
+  geom_bar(stat = "identity") +
+  labs(
+    title=title_text,
+    subtitle=subtitle_text,
+    x="Anzahl Kinder",
+    y="Durchschnitt Arbeitszeit in h/Woche"
+  ) +
+  theme(axis.text.x = element_text(angle=40, hjust = 1), legend.position = "none")
+}
+```
+
+```{r}
+barplot_worktime(mean_all_data, "Arbeitszeit und Kinder", "alle Altersgruppen")
+```
+
+```{r}
+barplot_worktime(mean_female, "Arbeitszeit und Kinder", "Frauen")
+```
+
+```{r}
+barplot_worktime(mean_all_data, "Arbeitszeit und Kinder", "Männer")
+```
+
+Bei den zwei letzten Darstellungen sieht man schön, dass Frauen weniger Arbeiten je höher die Kinderanzahl im Vergleich zu Männern. Dies bestätigt unsere vorher aufgeführte Quelle, welche besagt, dass Frauen eher ihr Arbeitspensum reduzieren als Männer bei der Betreuung von Kindern.
+
+
+

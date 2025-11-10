@@ -1,0 +1,1218 @@
+---
+title: "In der Welt der Beziehungen und ihre Auswirkungen"
+output: 
+  html_document:
+    theme: cerulean
+---
+
+```{r, message=FALSE, echo=FALSE}
+# Libraries
+library(dplyr)
+library(magrittr)
+library(tidyverse)
+library(ggplot2)
+library(stringr)
+library(reshape)
+library(ggpubr)
+
+# Daten einlesen
+source('../scripts/haushalte.R')
+source('../scripts/all_zp_data.R')
+source('../scripts/all_hh_data.R')
+```
+\
+*Wer lebt mit wem, wie lange und in welchem Zivilstand?*\
+*Beziehungen prägen unser Leben, doch wie spiegeln sich in Zahlen wider?*\
+*Was sagen Schweizer Bevölkerungsdaten über Partnerschaften und Beziehungsformen aus?*
+\
+\
+\
+Im Rahmen der Demografie-Challenge haben wir untersucht, welche Erkenntnisse sich aus Schweizer Bevölkerungsdaten in Bezug auf Partnerschaften und Beziehungsformen ableiten lassen. Unser Projektteam analysierte dazu Daten des Bundesamts für Statistik mit einem besonderen Fokus auf Paarkonstellationen, Zivilstand, Altersunterschiede sowie familiäre Strukturen. Ziel der Analyse war es, ein besseres Verständnis dafür zu gewinnen, wie Beziehungen in der Schweiz gelebt werden und welche Muster sich dabei erkennen lassen.
+\
+Im vorliegenden Bericht werden ausgewählte Fragestellungen vorgestellt, die im Verlauf der Analyse entwickelt und näher betrachtet wurden.
+
+------------------------------------------------------------------------
+
+### Trennen sich eher Jüngere als Ältere?
+
+```{r, message=FALSE, echo=FALSE}
+# Wähle gewünschte Merkmale
+df_zivilalter <- haushalte_vz2000[c("H_RALTJ", "H_RZIVL", "H_RZIVJ", "H_RGESL")]
+```
+
+Zu Beginn der Analyse wurde untersucht, ob ein Zusammenhang zwischen dem Alter von Ehepaaren und dem Risiko einer Trennung besteht. Dabei wurde die Hypothese betrachtet, dass jüngere Paare möglicherweise ein höheres Trennungsrisiko aufweisen, da sie sich häufiger in einer weniger stabilen Lebensphase befinden. Faktoren wie berufliche Situation, Ausbildung oder Wohnverhältnisse könnten in dieser Lebensphase noch ungesichert sein und sich potenziell belastend auf die Partnerschaft auswirken.
+
+In diesem Abschnitt wird der Begriff „Trennung“ verwendet, wobei damit ausschliesslich rechtlich vollzogene Trennungen im Sinne einer zivilstandsrechtlich registrierten Scheidung gemeint sind. Die Datengrundlage bezieht sich auf die jeweils zuletzt erfasste Änderung des Zivilstands mit dem Fokus auf Scheidungen. Trennungen von nicht verheirateten Paaren sind in diesen Daten nicht erfasst und können deswegen nicht miteinbezogen werden.
+
+##### Wann heiraten Paare in der Schweiz?
+
+Bevor die Frage untersucht wird, ob Trennungen häufiger bei jüngeren oder älteren Paaren auftreten, wurde zunächst das Heiratsalter in der Schweiz analysiert. Das Alter zum Zeitpunkt der Eheschliessung stellt einen wichtigen Faktor dar, da es in Zusammenhang mit der Stabilität einer Partnerschaft und dem damit verbundenen Trennungsrisiko stehen kann.
+
+Heiraten ist nicht mehr für alle ein klares Ziel. In der SRF-Sendung «Kompass» berichten junge Erwachsene, dass sie die Ehe zunehmend hinterfragen. Für viele steht nicht mehr das klassische Modell mit Trauschein im Vordergrund, sondern eher individuelle Lebensentwürfe, Flexibilität und Unabhängigkeit. Die Ehe wird dabei nicht unbedingt als Garant für Stabilität wahrgenommen, sondern teilweise sogar als Risiko für die Beziehung.
+[Quelle](https://www.srf.ch/radio-srf-virus/kompass-ist-heiraten-noch-cool)
+
+Diese gesellschaftliche Debatte bietet eine Grundlage für die kommende Analyse und wirft Fragen auf, bezüglich dem Heiratsalter von Paaren.
+
+Laut dem Statistischen Amt des Kantons Zürich liegt das durchschnittliche Heiratsalter bei der ersten Ehe bei 29.9 Jahren für Frauen und 32.2 Jahren für Männer.
+[Quelle](https://www.zh.ch/content/dam/zhweb/bilder-dokumente/footer/news/2018/documente/si_2018_10_heiraten_partnerschaften.pdf)
+
+Um zu prüfen, ob dies auch für die ganze Schweiz gilt, wurden die nationalen Daten aus dem Jahr 2000 ausgewertet.
+Diese zeigen ein sehr ähnliches Bild:
+
+```{r, message=FALSE, echo=FALSE}
+# Ziel: Analyse des Heiratsalters bei Frauen in 3-Jahres-Schritten 
+
+# 1. Berechnung des Alters bei Heirat
+df_heirat_frauen <- df_zivilalter %>%
+  filter(
+    H_RZIVL == 2,        # Zivilstand = verheiratet
+    H_RZIVJ > 0,         # gültiges Jahr der Eheschliessung
+    H_RALTJ > 0,         # gültiges Alter im Jahr 2000
+    H_RGESL == 2         # weiblich
+  ) %>%
+  mutate(
+    Geburtsjahr = 2000 - H_RALTJ,                  # Geburtsjahr berechnen
+    Alter_bei_Heirat = H_RZIVJ - Geburtsjahr       # Alter bei Eheschliessung
+  ) %>%
+  drop_na()  # Entfernt Zeilen mit fehlenden Werten
+
+# 2. Gruppierung nach 3-Jahres-Altersklassen
+gruppen <- seq(10, 100, by = 3)
+labels <- paste0(gruppen, "–", gruppen + 2)
+
+df_heirat_frauen <- df_heirat_frauen %>%
+  mutate(altersgruppe = cut(
+    Alter_bei_Heirat,
+    breaks = c(gruppen, max(gruppen) + 3),  # Letztes Intervall bis 103
+    right = FALSE,
+    include.lowest = TRUE,
+    labels = labels
+  ))
+
+# 3. Visualisierung: Heiratsalter in 3-Jahres-Schritten
+ggplot(df_heirat_frauen, aes(x = altersgruppe)) +
+  geom_bar(fill = "mediumseagreen", color = "black") +
+  labs(
+    title = "Heiratsalter von Frauen nach Altersgruppe (3-Jahres-Schritte)",
+    x = "Altersgruppe bei Heirat",
+    y = "Anzahl"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # bessere Lesbarkeit
+
+```
+
+Im Jahr 2000 lag das durchschnittliche Alter bei der ersten Eheschliessung für Frauen bei 27,99 Jahren, basierend auf den Gesamtdaten des Bundesamts für Statistik Schweiz aus dem Jahr 2000.
+
+```{r, message=FALSE, echo=FALSE}
+# Ziel: Analyse des Heiratsalters bei Männern in 3-Jahres-Schritten
+
+# 1. Berechnung des Alters bei Heirat
+df_heirat_maenner <- df_zivilalter %>%
+  filter(
+    H_RZIVL == 2,        # Zivilstand = verheiratet
+    H_RZIVJ > 0,         # gültiges Jahr der Eheschliessung
+    H_RALTJ > 0,         # gültiges Alter im Jahr 2000
+    H_RGESL == 1         # männlich
+  ) %>%
+  mutate(
+    Geburtsjahr = 2000 - H_RALTJ,                  # Geburtsjahr berechnen
+    Alter_bei_Heirat = H_RZIVJ - Geburtsjahr       # Alter bei Eheschliessung
+  )
+
+# 2. Gruppierung nach 3-Jahres-Altersklassen von 10 bis 100
+gruppen <- seq(10, 100, by = 3)
+labels <- paste0(gruppen, "–", gruppen + 2)
+
+df_heirat_maenner <- df_heirat_maenner %>%
+  mutate(altersgruppe = cut(
+    Alter_bei_Heirat,
+    breaks = c(gruppen, max(gruppen) + 3),
+    right = FALSE,
+    include.lowest = TRUE,
+    labels = labels
+  ))
+
+# 3. Visualisierung: Heiratsalter in 3-Jahres-Schritten
+ggplot(df_heirat_maenner, aes(x = altersgruppe)) +
+  geom_bar(fill = "mediumseagreen", color = "black") +
+  labs(
+    title = "Heiratsalter von Männern nach Altersgruppe (3-Jahres-Schritte)",
+    x = "Altersgruppe bei Heirat",
+    y = "Anzahl"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # bessere Lesbarkeit
+
+```
+
+Bei Männern lag das durchschnittliche Heiratsalter bei 28,95 Jahren.
+
+Der Kanton Zürich liegt somit nahe am landesweiten Durchschnitt.
+Grosse regionale Unterschiede sind nicht ersichtlich.
+
+**Warum ist das relevant?**\
+Das Heiratsalter gibt wichtige Hinweise auf die Hauptfrage.\
+Wenn die Mehrheit der Paare erst mit über 30 Jahren heiratet, stellt sich die Frage, ob Trennungen dann ebenfalls erst später erfolgen.\
+Oder sind Ehen, die besonders früh geschlossen wurden, besonders anfällig für eine Scheidung?
+
+##### Wann wird tatsächlich geschieden?
+
+Im nächsten Schritt wurden deshalb die Daten zu Scheidungen genauer angeschaut mit der Vermutung, dass jüngere Paare häufiger betroffen sein könnten.
+
+```{r, message=FALSE, echo=FALSE}
+# Ziel: Analyse des Scheidungsalters für alle Personen, unabhängig vom Geschlecht
+
+# 1. Berechnung: Alter bei Scheidung
+df_trennung <- df_zivilalter %>% 
+  filter(
+    H_RZIVL == 4,        # Zivilstand = Geschieden
+    H_RZIVJ > 0,         # Zivilstandsänderung
+    H_RALTJ > 0          # Gültiges Alter
+  ) %>%
+  mutate(
+    alter_bei_scheidung = H_RZIVJ - (2000 - H_RALTJ)  # Alter bei Scheidung berechnen
+  )
+
+# Überblick zur Verteilung des Scheidungsalters
+summary(df_trennung$alter_bei_scheidung)
+
+# 2. Gruppierung in 3-Jahres-Altersklassen (10 bis 102 Jahre)
+gruppen <- seq(10, 100, by = 3)                      # Altersklassen alle 3 Jahre
+labels <- paste0(gruppen, "–", gruppen + 2)          # z.B. "10–12", "13–15", ...
+
+# Optional: Nur Werte im realistischen Altersbereich einbeziehen (eliminiert NA-Gruppierungen)
+df_trennung <- df_trennung %>%
+  filter(between(alter_bei_scheidung, min(gruppen), max(gruppen) + 2))
+
+# Neue Variable für Altersgruppen generieren
+df_trennung <- df_trennung %>%
+  mutate(
+    altersgruppe = cut(
+      alter_bei_scheidung,
+      breaks = c(gruppen, max(gruppen) + 2),  # Letztes Intervall
+      labels = labels
+    )
+  )
+
+# 3. Visualisierung: Verteilung der Scheidungen nach Altersgruppen
+ggplot(df_trennung, aes(x = altersgruppe)) +
+  geom_bar(fill = "tomato", color = "black") +
+  labs(
+    title = "Scheidungen nach Altersgruppe (3-Jahres-Schritte)",
+    x = "Altersgruppe bei Scheidung",
+    y = "Anzahl"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)  # bessere Lesbarkeit der X-Achse
+  )
+
+```
+
+Aufgrund der erneuten Analyse der Daten des Bundesamts für Statistik kann festgestellt werden, dass die meisten Scheidungen zwischen dem 33.und 46 Lebensjahr erfolgen, also eher in der Lebensmitte als im jungen Erwachsenenalter.
+
+```{r, message=FALSE, echo=FALSE}
+# Ziel: Analyse des Scheidungsalters bei Frauen anhand der BFS-Daten von 2000
+# Wir möchten herausfinden, in welchem Alter Frauen geschieden wurden.
+# Dafür berechnen wir ihr Alter zum Zeitpunkt der letzten Scheidung 
+# und gruppieren diese Werte in 3-Jahres-Altersklassen zur besseren Übersicht.
+
+# 1. Berechnung: Alter bei Scheidung
+df_trennung <- df_zivilalter %>% 
+  filter(
+    H_RZIVL == 4,        # Zivilstand = Geschieden
+    H_RZIVJ > 0,         # Gültiges Jahr Zivilstandsänderung
+    H_RALTJ > 0,         # Gültiges Alter
+    H_RGESL == 2         # Nur Frauen
+  ) %>%
+  mutate(
+    alter_bei_scheidung = H_RZIVJ - (2000 - H_RALTJ)  # Alter zum Zeitpunkt der Scheidung
+  )
+
+# Übersicht zur Verteilung des Scheidungsalters
+summary(df_trennung$alter_bei_scheidung)
+
+# 2. Gruppierung in 3-Jahres-Altersklassen (15–86 Jahre)
+gruppen <- seq(10, 100, by = 3)  # Gruppierungen
+labels <- paste0(gruppen, "–", gruppen + 2)  # z.B. "15–17", "18–20", ...
+
+# Ergänzung: Nur Alterswerte innerhalb des sinnvollen Bereichs (optional)
+df_trennung <- df_trennung %>% 
+  filter(between(alter_bei_scheidung, min(gruppen), max(gruppen) + 2))  # vermeidet NAs
+
+# Altersgruppe als neue kategoriale Variable erstellen
+df_trennung <- df_trennung %>%
+  mutate(
+    altersgruppe = cut(
+      alter_bei_scheidung,
+      breaks = c(gruppen, max(gruppen) + 2),  # Oberegränze
+      labels = labels
+    )
+  )
+
+# 3. Visualisierung: Scheidungen nach Altersgruppen bei Frauen
+ggplot(df_trennung, aes(x = altersgruppe)) +
+  geom_bar(fill = "tomato", color = "black") +
+  labs(
+    title = "Scheidungen nach Altersgruppe bei Frauen (3-Jahres-Schritte)",
+    x = "Altersgruppe bei Scheidung",
+    y = "Anzahl"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)  # bessere Lesbarkeit der X-Achse
+  )
+```
+
+**Frauen**\
+Bei den Frauen liegt das Medianalter bei der Scheidung bei 39 Jahren, der Durchschnitt bei 39,6 Jahren.
+Ein Viertel der geschiedenen Frauen war jünger als 33, drei Viertel waren jünger als 46.
+Das Mindestalter lag bei 15, das Höchstalter bei 93 Jahren.
+
+```{r, message=FALSE, echo=FALSE}
+# Ziel: Analyse des Alters bei Scheidung für Männer
+# Wir möchten herausfinden, in welchem Alter Männer geschieden wurden.
+# Dafür berechnen wir ihr Alter zum Zeitpunkt der letzten Scheidung 
+# und gruppieren diese Werte in 3-Jahres-Altersklassen zur besseren Übersicht.
+
+# 1. Berechnung des Alters bei Scheidung für Männer
+df_trennung <- df_zivilalter %>% 
+  filter(
+    H_RZIVL == 4,       # Zivilstand = Geschieden
+    H_RZIVJ > 0,        # Gültiges Jahr Zivilstandsänderung
+    H_RALTJ > 0,        # Gültiges Alter im Jahr 2000
+    H_RGESL == 1        # Nur Männer berücksichtigen
+  ) %>%
+  mutate(
+    alter_bei_scheidung = H_RZIVJ - (2000 - H_RALTJ)  # Alter bei Scheidung berechnen
+  )
+
+# Kurze Übersicht der berechneten Alterswerte (Min, Median, Mean etc.)
+summary(df_trennung$alter_bei_scheidung)
+
+# 2. Gruppierung in 3-Jahres-Altersklassen
+# Dies hilft, Muster und Häufungen im Alter besser sichtbar zu machen
+gruppen <- seq(10, 100, by = 3)                # Gruppierungen
+labels <- paste0(gruppen, "–", gruppen + 2)    # Label für jede Gruppe, z.B. "15–17"
+
+df_trennung <- df_trennung %>%
+  mutate(
+    altersgruppe = cut(
+      alter_bei_scheidung,
+      breaks = c(gruppen, max(alter_bei_scheidung, na.rm = TRUE) + 1),     # Obergrenze
+      labels = labels              # Altersgruppen als Kategorien zuweisen
+    )
+  )
+
+# 3. Visualisierung der Scheidungen nach Altersgruppe
+# Darstellung der Verteilung der Scheidungen auf Altersklassen
+ggplot(df_trennung, aes(x = altersgruppe)) +
+  geom_bar(fill = "tomato", color = "black") +
+  labs(
+    title = "Scheidungen nach Altersgruppe bei Männern (3-Jahres-Schritte)",
+    x = "Altersgruppe bei Scheidung",
+    y = "Anzahl"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)  # Beschriftung drehbar für bessere Lesbarkeit
+  )
+
+```
+
+**Männer**\
+Bei den Männern ist das Alter bei der Scheidung im Durchschnitt etwas höher.
+Der Median liegt bei 40 Jahren, der Durchschnitt bei 41,3 Jahren.
+Ein Viertel der Männer war jünger als 34, drei Viertel jünger als 47.
+Auch hier reicht die Altersspanne von 15 bis 95 Jahren.
+
+**Auffällige Alterswerte**\
+In wenigen Fällen liegt das Alter bei Scheidung zwischen 13 und 17 Jahren.
+In der Schweiz ist eine Heirat jedoch erst ab 18 Jahren gesetzlich erlaubt.
+Solche Fälle lassen sich möglicherweise dadurch erklären, dass einige Personen im Ausland geheiratet haben, wo andere Regelungen gelten.
+Denkbar ist auch, dass die Eheschliessung mit elterlicher Zustimmung erfolgt ist, was früher vereinzelt möglich war.
+
+Diese Einzelfälle wurden nicht im Detail weiter untersucht, da dies den Rahmen und die verfügbare Zeit der Analyse überschritten hätte.
+Die genannten Erklärungen sind daher als Annahmen zu verstehen.
+
+Solche Ausreisser sind sehr selten und haben keinen wesentlichen Einfluss auf das Gesamtergebnis, zeigen aber, dass in grösseren Datensätzen immer auch spezielle Konstellationen vorkommen können.
+
+**Das bedeutet:**\
+Die Werte zeigen, dass Männer im Durchschnitt etwas später geschieden werden als Frauen, was mit altersbezogenen Mustern in Paarbeziehungen zusammenhängen könnte – etwa dass Männer bei der Heirat tendenziell etwas älter sind.
+
+##### Ergebnisse
+
+Die ursprüngliche Annahme lautete: Jüngere Paare trennen sich eher als ältere.\
+Die Daten zeichnen jedoch ein differenzierteres Bild.
+
+Früh geschlossene Ehen können tatsächlich ein erhöhtes Risiko aufweisen, vor allem wenn sie mit Lebensumbrüchen wie Ausbildung oder Berufseinstieg zusammenfallen.
+
+Der Grossteil aller Scheidungen betrifft jedoch nicht sehr junge Paare, sondern Menschen im Alter zwischen Mitte 30 und Mitte 40.
+
+Das Trennungsrisiko scheint somit weniger vom Alter selbst abzuhängen, sondern vielmehr von der Beziehungsdauer und der jeweiligen Lebensphase.
+
+Die Trennungen erfolgen eher später als früher, was teilweise auch an der Messung der Trennungen liegt, da nur auf rechtliche Scheidungen Bezug genommen wird und nicht auf allgemeine Partnerschaften.
+
+*Kurz gesagt:*\
+Es sind nicht zwingend die Jüngeren, die sich häufiger trennen.\
+Häufig sind es Paare, bei denen sich nach einigen gemeinsamen Jahren Herausforderungen wie Kinder, Arbeit, Stress oder Alltagsbelastungen kumulieren.\
+Die Scheidung erfolgt also oft nicht früh, sondern später.
+
+------------------------------------------------------------------------
+
+### Trennen sich Paare eher, wenn die Arbeitsposition tiefer ist? Trennen sich Paare eher, wenn die Arbeitszeit höher ist?
+
+```{r, message=FALSE, echo=FALSE}
+# Daten zusammenführen seit 2015 (Die Columns sind davor anders und wir können uns nicht sicher sein, dass die Messungen gleichzustellen sind)
+all_zp_data_15_21 <- zp_2015 %>%
+  bind_rows(zp_2016) %>%
+  bind_rows(zp_2017) %>%
+  bind_rows(zp_2018) %>%
+  bind_rows(zp_2019) %>%
+  bind_rows(zp_2020) %>%
+  bind_rows(zp_2021)
+```
+
+Nun ist das Trennungsalter und die möglichen Faktoren bekannt. In dem folgenden Abschnitt wird tiefer auf die Arbeitsposition und die Arbeitszeit in Zusammenhang mit Trennungen eingegangen. Dabei sind die Hypothesen aufgekommen, dass Paare sich eher trennen, wenn die Arbeitsposition tiefer ist oder wenn die Arbeitszeit hoch ist.
+
+Es werden Daten vom Jahr 2015 bis zum Jahr 2021 untersucht des Bundesamts für Statistik.
+
+##### Paare trennen sich eher, wenn die Arbeitsposition tiefer ist
+
+Externe Quellen sagen nein, es ist genau umgekehrt. Die Autoren des Manuskripts “Booms, Bust and Divorce” fassten viele Studien, Bücher und andere Quellen zusammen und kamen zur Schlussfolgerung, dass Trennungen prozyklisch ist. Dies bedeutet sobald die Wirtschaft gut läuft, trennen sich Menschen eher. Das Manuskript beschreibt, dass eine Scheidung teuer ist und Menschen in schlechten Zeiten aufeinander angewiesen sind. In guten Zeiten kann man sich eine grosse Lebensentscheidung leisten.
+[Quelle](https://pmc.ncbi.nlm.nih.gov/articles/PMC4159954/)
+
+Eine andere Quelle besagt, dass Menschen mit mehr Geld eher einen Seitensprung wagen als die ohne und so die Beziehung gefährden. Der Artikel beschreibt mehrere Gründe weswegen eine Ehe bei wohlhabenden Menschen eher scheitert. Die Abwesenheit eines erfolgreichen Partners, ungleiche Machtverhältnisse, Streit über wie man Geld ausgibt (mehr Geld mehr Diskussionsmöglichkeiten), Vertrauensmangel von vergangenen Affären, eine mangelnde Moral basierend auf hohe Ansprüche, weniger Flexibilität und Empathie in der Beziehung und Narzissmus sind alles Gründe, die eine Scheidung (vermehrt bei Menschen mit viel Geld) verursachen können.
+[Quelle](https://caldaclinic.com/de/how-wealth-complicates-a-marriage-break-up-and-impacts-mental-health/)
+
+Diese neue Erkenntnisse versuchen wir nun in unseren Daten wiederzuspiegeln. Die folgende Grafik zeigt die Anzahl getrennter Personen von den zusammengefassten Daten seit Jahr 2010 bis Jahr 2021. Trennungen umfassen geschiedene Menschen und Menschen mit aufgelösten Partnerschaften.
+
+```{r, message=FALSE, echo=FALSE}
+# Anzahl Personen pro Arbeitsposition zählen und zusammentragen
+positions_count <- all_zp_data_15_21 %>%
+  filter(STATUSINEMPL_DETAIL >= 0) %>%
+  select(STATUSINEMPL_DETAIL) %>%
+  group_by(STATUSINEMPL_DETAIL) %>%
+  count(name='Count') %>%
+  mutate(statusinempl_detail_str = case_when((STATUSINEMPL_DETAIL == 11) ~ '11 Selbständige mit Angestellten (keine AG oder GmbH)',
+                                     (STATUSINEMPL_DETAIL == 12) ~ '12 Selbständige ohne Angestellte (keine AG oder GmbH)',
+                                     (STATUSINEMPL_DETAIL == 20) ~ '20 Mitarbeitende Familienmitglieder',
+                                     (STATUSINEMPL_DETAIL == 31) ~ '31 Firmeneigentümer/-innen (AG oder GmbH) mit Angestellten',
+                                     (STATUSINEMPL_DETAIL == 32) ~ '32 Firmeneigentümer/-innen (AG oder GmbH) ohne Angestellte',
+                                     (STATUSINEMPL_DETAIL == 41) ~ '41 Direktoren/-innen oder Direktionsmitglieder',
+                                     (STATUSINEMPL_DETAIL == 42) ~ '42 Angestellte mit Vorgesetztenfunktion',
+                                     (STATUSINEMPL_DETAIL == 43) ~ '43 Angestellte ohne Vorgesetztenfunktion',
+                                     (STATUSINEMPL_DETAIL == 50) ~ '50 Lernende in der dualen beruflichen Grundbildung',
+                                     (STATUSINEMPL_DETAIL == 60) ~ '60 Erwerbslose',
+                                     (STATUSINEMPL_DETAIL == 70) ~ '70 Nichterwerbspersonen',
+                                      TRUE ~ NA))
+
+# Anzahl getrennte Personen pro Arbeitsposition zählen und zusammentragen
+positions_seperated_count <- all_zp_data_15_21 %>%
+  filter(STATUSINEMPL_DETAIL >= 0 & (MARITALSTATUS == 4 | MARITALSTATUS == 7)) %>%
+  select(STATUSINEMPL_DETAIL) %>%
+  group_by(STATUSINEMPL_DETAIL) %>%
+  count(name='Seperated')
+
+# Gesamtanzahl und getrennte Personen zusammenführen für den Plot
+melted<-melt(
+  data.frame(p=positions_count$statusinempl_detail_str,alle=positions_count$Count,getrennt=positions_seperated_count$Seperated),
+  id="p"
+)
+
+# Plot erstellen
+ggplot(melted,aes(x=p,y=value,fill=variable)) + 
+  geom_bar(stat="identity",position="dodge", alpha=.3) +
+  geom_text(
+    aes(x = p, y = value, label = value, group = variable), 
+    hjust = -0.1, size = 2,
+    position = position_dodge(width = 1),
+    inherit.aes = TRUE
+  ) +
+  scale_x_discrete(labels = label_wrap_gen(width=40)) +
+  coord_flip() +
+  labs(
+    title="Anzahl Trennungen pro Arbeitsposition",
+    x="Arbeitsposition",
+    y="Anzahl Personen",
+    fill="Zivilstand",
+  ) +
+  ylim(NA, 750000) + 
+  theme_classic() +
+  scale_y_continuous(name="Anzahl Personen", labels = scales::comma)
+```
+
+Wie man sieht sind die Anzahl Personen pro Arbeitsposition sehr unterschiedlich. Am höchten sind die Anzahl Trennungen bei den "Nichterwerbspersonen" und "Angestellt ohne Vorgesetztenfunktion", welche beide auch eine hohe Gesamtanzahl an Personen haben.
+
+Weil die Unterschiede in den Zahlen zwischen den Arbeitspositionen extrem variieren, werden die Anzahl Personen in Relation mit den getrennten Personen gesetzt und verglichen. Folgende Grafik beschreibt die Anzahl getrennten Personen pro Arbeitsposition in Relation zu nicht getrennten Personen in Prozent.
+
+```{r, message=FALSE, echo=FALSE}
+# Prozent ausrechnen, getrennte Personen von der Gesamtanzahl Personen
+df_percentages <- left_join(positions_count, positions_seperated_count, by=join_by(STATUSINEMPL_DETAIL)) %>%
+  mutate(percentage = round(Seperated / Count * 100, digits = 2))
+
+# Plot mit Prozenten erstellen
+ggplot(df_percentages, aes(reorder(factor(statusinempl_detail_str), percentage, .desc = TRUE), y=percentage, fill = percentage)) + 
+  geom_bar(stat = "identity") +
+  labs(
+    title="Prozent von Trennungen pro Arbeitsposition",
+    x="Arbeitsposition",
+    y="Prozent getrennt"
+  ) +
+  coord_flip() +
+  geom_text(
+    aes(x = statusinempl_detail_str, y = percentage, label = paste0(percentage, '%')), 
+    hjust = -0.1, size = 4,
+    position = position_dodge(width = 1),
+    inherit.aes = TRUE
+  ) +
+  ylim(NA, 20) +
+  theme_classic() +
+  theme(legend.position = "none")
+```
+
+Auf dieser Grafik wird festgehalten, dass in Relation zu gesamten Anzahl Personen von einer Arbeitsposition, die Menschen die "Selbständig ohne Angestellte" oder "Firmeneigentümer/-innen ohne Angestellte" sind, prozentual am Meisten sich von ihren Partnern trennen. Der Rest befindet sich bei einer \~10% Trennrate und am Wenigsten trennen sich Lernende in der dualen beruflichen Grundbildung. Dass die Lernende in der dualen beruflichen Grundbildung ist nicht überraschend, denn diese sind meist jüngere Menschen und haben sich vermutlich noch nicht rechtlich an einen Partner gebunden.
+
+Mit diesen Visualisierungen können wir nun sehen, dass unsere Annahme: "Paare trennen sich eher, wenn die Arbeitsposition tiefer ist" in den Daten nicht ersichtlich ist. Auch die ungekehrte Aussage, die wir aus externen Quellen gefunden haben, kann nicht bewiesen werden. Die höchsten Anzahl Trennungen und der in Relation gesetzte Prozentsatz ist nicht gross aussagend, da erstens nicht eindeutig alle besser gestellten Arbeitspositionen höhere Zahlen aufweisen und zweitens wir keine über mehrere Jahre übergreifende Daten haben. Somit können wir auch mit eindeutigeren Zahlen den wirklichen Trennungsgrund NICHT ausfindig machen können.
+
+##### Paare trennen sich eher, wenn die Arbeitszeit höher ist
+
+Laut dem Psychotherapeuten Bryan E. Robinson haben Workaholics Schwierigkeiten in Beziehungen. In seinem Buch beschreibt er, wie Workaholics Familienereignisse kurz halten oder gar nicht auftauchen. Bei nicht berufsbezogenen Aktivitäten sind sie gedanklich abwesend und warten auf Telefonanrufe von ihren Mitarbeitern. Ähnlich wie bei einer Alkoholsucht beginnen sie, den Laptop oder das Telefon zu verstecken und im Heimlichen zu arbeiten, um keine Auseinandersetzung mit dem Partner anzuzetteln.\
+(Robinson, B. E. (2019). #Chill: Turn Off Your Job And Turn On Your Life. New York: William Morrow)\
+[Quelle](https://www.psychologytoday.com/us/blog/the-right-mindset/202007/i-only-work-on-days-that-end-in-y)
+
+```{r, message=FALSE, echo=FALSE}
+# Funktion, um Durchschnitt und Anzahl für Arbeitszeit zu holen
+join_worktime_data <- function(data){
+    return(
+      left_join(
+        data %>% group_by(MARITALSTATUS) %>% count(name='Count'),
+        data %>% group_by(MARITALSTATUS) %>% dplyr::summarize(Mean = mean(TIMEWORKEDPERWEEKSUM)),
+        by = join_by(MARITALSTATUS)
+      ) %>%
+        mutate(martialstatus_str = case_when((MARITALSTATUS == 1) ~ 'Ledig',
+                                     (MARITALSTATUS == 2) ~ 'Verheiratet',
+                                     (MARITALSTATUS == 3) ~ 'Verwitwet',
+                                     (MARITALSTATUS == 4) ~ 'Geschieden',
+                                     (MARITALSTATUS == 5) ~ 'Unverheiratet',
+                                     (MARITALSTATUS == 6) ~ 'In eingetragener Partnerschaft',
+                                     (MARITALSTATUS == 7) ~ 'Aufgelöste Partnerschaft',
+                                      TRUE ~ NA))
+    )
+}
+
+# Definierte Funktion für mehrere Daten brauchen
+# Alle Daten
+mean_all_data <- join_worktime_data(
+  all_zp_data_15_21 %>%
+  filter(TIMEWORKEDPERWEEKSUM >= 0 & MARITALSTATUS > 0)
+)
+# Nach Alter gefiltert, die am ehsten in einem Arbeitsverhältnis sind (18 bis 60 Jahre alt)
+mean_between_18_60 <- join_worktime_data(
+  all_zp_data_15_21 %>%
+  filter(AGE >= 18 & AGE < 60) %>%
+  filter(TIMEWORKEDPERWEEKSUM >= 0 & MARITALSTATUS > 0)
+)
+```
+
+```{r, message=FALSE, echo=FALSE}
+# Funktion für Plotting Arbeitszeit
+barplot_worktime <- function(data, title_text, subtitle_text){
+  ggplot(data, aes(x=reorder(factor(martialstatus_str), Mean, .desc = TRUE), y=Mean, fill=Mean)) + 
+  geom_bar(stat = "identity") +
+  labs(
+    title=title_text,
+    subtitle=subtitle_text,
+    x="Zivilstand",
+    y="Durchschnitt Arbeitszeit in h/Woche"
+  ) +
+  theme(axis.text.x = element_text(angle=40, hjust = 1), legend.position = "none")
+}
+```
+
+Es folgt eine Grafik die alle Zivilstände und die durchschnittliche Arbeitszeit darstellt.
+
+```{r, message=FALSE, echo=FALSE}
+# Plot für alle Daten erstellen
+barplot_worktime(mean_all_data, "Arbeitszeit und Zivilstand", "alle Altersgruppen")
+```
+
+Die Menschen, die aus einer aufgelösten Partnerschaft kommen, arbeiten am Meisten. Jedoch finden wir geschiedene Menschen erst an vierter Stelle. Die nächste Grafik umfasst alle Menschen zwischen 18 und 60 Jahren, um die Personen auszuschliessen, die eventuell mit wenigen Arbeitstunden die Zahlen stark beeinflussen.
+
+```{r, message=FALSE, echo=FALSE}
+# Plot für Personen, die 18 bis 60 Jahre alt sind, erstellen
+barplot_worktime(mean_between_18_60, "Arbeitszeit und Zivilstand", "Menschen von 18 bis 60 Jahren")
+```
+
+Wie man sieht, ist das Ergebniss fast das gleiche. Die Menschen aus einer aufgelösten Partnerschaft sind immer noch auf Platz 1 und die geschiedenen Personen sind auf der vierten Position.
+
+Die drei Zivilstände mit den meisten Arbeitsstunden sind immer die gleichen, es spielt keine Rolle wie die Altersgruppe begrenzt wurden. Ab 60 Jahren werden die Arbeitstunden natürlich weniger. Bei dieser Untersuchung wäre es auch interessant gewesen, zu wissen, ob zB. die Arbeitstunden zunehmen vor einer Trennung. Das kann man jedoch mit einzelnen Stichproben nicht vornehmen.
+
+##### Ergebnisse
+
+Die Daten sind jedes Jahr neue Stichproben, heisst es können keine Schlussfolgerungen gemacht werden über die Veränderungen von Faktoren und der exakte Trennungsgrund über mehrere Jahre für beide dieser Hypothesen. Der Einblick in die Daten bietet trotzdem ein gutes Grundverständnis von den Arbeitspositionen und der Arbeitszeit in Verbindung mit Trennungen.
+
+------------------------------------------------------------------------
+
+### Beeinflusst die Arbeitsposition und/oder Arbeitszeit die Anzahl Kinder von einem Menschen? Gibt es Unterschiede im Geschlecht?
+
+```{r, message=FALSE, echo=FALSE}
+# Selektiere aus jedem hh Datensatz
+hh_2015_new <- hh_2015 %>% select(HH_COUNTOF00_04, HH_COUNTOF05_15, HH_COUNTOF16_19, HOUSEHOLDYEARLYID)
+hh_2016_new <- hh_2016 %>% select(HH_COUNTOF00_04, HH_COUNTOF05_15, HH_COUNTOF16_19, HOUSEHOLDYEARLYID)
+hh_2017_new <- hh_2017 %>% select(HH_COUNTOF00_04, HH_COUNTOF05_15, HH_COUNTOF16_19, HOUSEHOLDYEARLYID)
+hh_2018_new <- hh_2018 %>% select(HH_COUNTOF00_04, HH_COUNTOF05_15, HH_COUNTOF16_19, HOUSEHOLDYEARLYID)
+hh_2019_new <- hh_2019 %>% select(HH_COUNTOF00_04, HH_COUNTOF05_15, HH_COUNTOF16_19, HOUSEHOLDYEARLYID)
+hh_2020_new <- hh_2020 %>% select(HH_COUNTOF00_04, HH_COUNTOF05_15, HH_COUNTOF16_19, HOUSEHOLDYEARLYID)
+hh_2021_new <- hh_2021 %>% select(HH_COUNTOF00_04, HH_COUNTOF05_15, HH_COUNTOF16_19, HOUSEHOLDYEARLYID)
+
+# Führe alle hh Daten seit 2015 zusammen
+hh_all_data <- hh_2015_new %>%
+  bind_rows(hh_2016_new) %>%
+  bind_rows(hh_2017_new) %>%
+  bind_rows(hh_2018_new) %>%
+  bind_rows(hh_2019_new) %>%
+  bind_rows(hh_2020_new) %>%
+  bind_rows(hh_2021_new)
+```
+
+```{r, message=FALSE, echo=FALSE}
+# Selektiere aus jedem hh Datensatz
+zp_2015_new <- zp_2015 %>% select(TIMEWORKEDPERWEEKSUM, STATUSINEMPL_DETAIL, HOUSEHOLDYEARLYID, SEX, AGE)
+zp_2016_new <- zp_2016 %>% select(TIMEWORKEDPERWEEKSUM, STATUSINEMPL_DETAIL, HOUSEHOLDYEARLYID, SEX, AGE)
+zp_2017_new <- zp_2017 %>% select(TIMEWORKEDPERWEEKSUM, STATUSINEMPL_DETAIL, HOUSEHOLDYEARLYID, SEX, AGE)
+zp_2018_new <- zp_2018 %>% select(TIMEWORKEDPERWEEKSUM, STATUSINEMPL_DETAIL, HOUSEHOLDYEARLYID, SEX, AGE)
+zp_2019_new <- zp_2019 %>% select(TIMEWORKEDPERWEEKSUM, STATUSINEMPL_DETAIL, HOUSEHOLDYEARLYID, SEX, AGE)
+zp_2020_new <- zp_2020 %>% select(TIMEWORKEDPERWEEKSUM, STATUSINEMPL_DETAIL, HOUSEHOLDYEARLYID, SEX, AGE)
+zp_2021_new <- zp_2021 %>% select(TIMEWORKEDPERWEEKSUM, STATUSINEMPL_DETAIL, HOUSEHOLDYEARLYID, SEX, AGE)
+
+# Führe alle zp Daten seit 2015 zusammen
+zp_all_data <- zp_2015_new %>%
+  bind_rows(zp_2016_new) %>%
+  bind_rows(zp_2017_new) %>%
+  bind_rows(zp_2018_new) %>%
+  bind_rows(zp_2019_new) %>%
+  bind_rows(zp_2020_new) %>%
+  bind_rows(zp_2021_new)
+```
+
+Mit den ersten Einblicken in die Daten über Arbeitsposition und Arbeitszeit können weitere Faktoren untersucht werden. Die Familie und Kinderzahl hat grossen Einfluss auf das Arbeitsleben einer Person. Der folgende Abschnitt bschäftigt sich mit diesen Faktoren und wie sie in den Daten sichtbar werden.
+
+Es werden Daten vom Jahr 2015 bis zum Jahr 2021 untersucht des Bundesamts für Statistik.
+
+Mehrere Studien besagen, dass die Arbeitsposition sowie die Arbeitszeit und Kinder sich gegenseitig beeinflussen. Eine Studie von Cukrowska-Torzewska & Matysiak (2020) zeigte, dass Frauen mit höherer beruflicher Stellung tendenziell weniger Kinder haben. Dies könnte darauf hindeuten, dass anspruchsvolle Berufe mit einer geringeren Kinderzahl verbunden sind. [Quelle](https://link.springer.com/article/10.1007/s10680-023-09681-4)
+
+Eine andere Studie von Lee et al. (2019) hat festgestellt, dass beruflicher Stress Auswirkungen auf Fertilität und Kinderwunsch haben. Sie besagt das Arbeitstress bei Männern die Anzahl der Schwangerschaften im ersten Zyklus reduzierte. Daraus könnte man ziehen, dass je höher die Arbeitszeit desto höher der Arbeitsstress, was zu wenigeren Kinder führen kann.
+[Quelle](https://pmc.ncbi.nlm.nih.gov/articles/PMC11812192)
+
+Genauso können Kinder die Arbeitsposition sowie Arbeitszeit beeinflussen. Laut einer Quelle reduzieren Mütter ihre Arbeitszeit signifikant nach der Geburt eines Kindes, unabhängig vom Einkommen vor der Geburt. Selbst wenn die Mutter vor der Geburt mehr verdiente, reduzierte sie ihre Arbeitszeit im Durchschnitt um 26%, während die Arbeitszeit des Vaters kaum beeinflusst wurde. [Quelle](https://www.nuffieldfoundation.org/news/mothers-more-likely-than-fathers-to-reduce-paid-work-even-when-they-earn-more)
+
+Das Bundesamt für Statistik visualisierte diese Beziehung auch. Die Erwerbstätigkeit von Frauen werden durch die Betreuung von Kindern unter 15 Jahren deutlich stärker beeinflusst als die von Männern. [Quelle](https://www.bfs.admin.ch/bfs/de/home/statistiken/arbeit-erwerb/erwerbstaetigkeit-arbeitszeit/vereinbarkeit-unbezahlte-arbeit/vereinbarkeit-familie-beruf.html)
+
+```{r, message=FALSE, echo=FALSE}
+# Alle Positionen und Anzahl Personen für jede Position
+zp_positions <- zp_all_data %>%
+    filter(STATUSINEMPL_DETAIL >= 0) %>%
+    group_by(STATUSINEMPL_DETAIL) %>%
+    count(name='person_count_position') %>%
+    mutate(statusinempl_detail_str = case_when((STATUSINEMPL_DETAIL == 11) ~ '11 Selbständige mit Angestellten (keine AG oder GmbH)',
+                                     (STATUSINEMPL_DETAIL == 12) ~ '12 Selbständige ohne Angestellte (keine AG oder GmbH)',
+                                     (STATUSINEMPL_DETAIL == 20) ~ '20 Mitarbeitende Familienmitglieder',
+                                     (STATUSINEMPL_DETAIL == 31) ~ '31 Firmeneigentümer/-innen (AG oder GmbH) mit Angestellten',
+                                     (STATUSINEMPL_DETAIL == 32) ~ '32 Firmeneigentümer/-innen (AG oder GmbH) ohne Angestellte',
+                                     (STATUSINEMPL_DETAIL == 41) ~ '41 Direktoren/-innen oder Direktionsmitglieder',
+                                     (STATUSINEMPL_DETAIL == 42) ~ '42 Angestellte mit Vorgesetztenfunktion',
+                                     (STATUSINEMPL_DETAIL == 43) ~ '43 Angestellte ohne Vorgesetztenfunktion',
+                                     (STATUSINEMPL_DETAIL == 50) ~ '50 Lernende in der dualen beruflichen Grundbildung',
+                                     (STATUSINEMPL_DETAIL == 60) ~ '60 Erwerbslose',
+                                     (STATUSINEMPL_DETAIL == 70) ~ '70 Nichterwerbspersonen',
+                                      TRUE ~ NA))
+
+# Zähle Anzahl Kinder
+cleaned_hh <- hh_all_data %>%
+  mutate(hh_all_data,
+         HH_COUNTOF00_04 = ifelse(is.na(HH_COUNTOF00_04), 0, HH_COUNTOF00_04),
+         HH_COUNTOF05_15 = ifelse(is.na(HH_COUNTOF05_15), 0, HH_COUNTOF05_15),
+         HH_COUNTOF16_19 = ifelse(is.na(HH_COUNTOF16_19), 0, HH_COUNTOF16_19))
+hh_children <- cleaned_hh %>% mutate(children_count = HH_COUNTOF00_04 + HH_COUNTOF05_15 + HH_COUNTOF16_19)
+
+# Kombiniere Anzahl Kinder mit Positionen
+combined <- zp_all_data %>% select(STATUSINEMPL_DETAIL, HOUSEHOLDYEARLYID) %>%
+  full_join(hh_children, "HOUSEHOLDYEARLYID")
+# Gruppiere nach Arbeitsposition
+children_count_per_position <- combined %>%
+  group_by(STATUSINEMPL_DETAIL) %>%
+  summarise(total_children = sum(children_count, na.rm = TRUE))
+
+# Alles zusammenführen für den Plot
+position_count_and_children <- children_count_per_position %>% full_join(zp_positions, "STATUSINEMPL_DETAIL")
+```
+
+```{r, message=FALSE, echo=FALSE}
+# Erstelle einen Plot dazu, welcher Anzahl Kinder und Anzahl Personen jeder Arbeitsposition darstellt
+melted<-melt(
+  data.frame(
+    p=position_count_and_children$statusinempl_detail_str,
+    Kinder=position_count_and_children$total_children,
+    Personen=position_count_and_children$person_count_position
+  ),
+  id="p"
+)
+ggplot(melted,aes(x=p,y=value,fill=variable)) + 
+  geom_bar(stat="identity",position="dodge", alpha=.3) +
+  geom_text(
+    aes(x = p, y = value, label = value, group = variable), 
+    hjust = -0.1, size = 2,
+    position = position_dodge(width = 1),
+    inherit.aes = TRUE
+  ) +
+  scale_x_discrete(labels = label_wrap_gen(width=40)) +
+  coord_flip() +
+  labs(
+    title="Anzahl Kinder pro Arbeitsposition",
+    x="Arbeitsposition",
+    y="Anzahl",
+    fill="Anzahl von:",
+  ) +
+  ylim(NA, 700000) + 
+  theme_classic() +
+  scale_y_continuous(name="Anzahl Menschen", labels = scales::comma)
+```
+
+In der oberen Grafik kann man die Anzahl Kinder für jede Arbeitsposition gut erkennen. Da die Anzahl jedoch noch nicht viel aussagt, setzen wir diese in Relation zueinander und berechnen den Prozentsatz.
+
+```{r, message=FALSE, echo=FALSE}
+# Setze diese in Relation und berechne Prozent an Kinder von Personen pro Position
+df_percentages <- position_count_and_children %>%
+  mutate(percentage = round(total_children / person_count_position * 100, digits = 2))
+
+# Erstelle Plot
+ggplot(df_percentages, aes(reorder(factor(statusinempl_detail_str), percentage, .desc = TRUE), y=percentage, fill = percentage)) + 
+  geom_bar(stat = "identity") +
+  labs(
+    title="Prozent an Kindern pro Arbeitsposition",
+    x="Arbeitsposition",
+    y="Prozent an Kindern"
+  ) +
+  coord_flip() +
+  geom_text(
+    aes(x = statusinempl_detail_str, y = percentage, label = paste0(percentage, '%')), 
+    hjust = -0.1, size = 4,
+    position = position_dodge(width = 1),
+    inherit.aes = TRUE
+  ) +
+  ylim(NA, 200) +
+  theme_classic() +
+  theme(legend.position = "none")
+```
+
+In dieser Grafik kann man gut erkennen, dass die Position "Lernende in der dualen beruflichen Grundbildung im Vergleich zu den anderen Position eine extrem hohe Kinderquote hat. Dies könnte unsere Quellen bestätigen, das beruflicher Stress zu weniger Kindern führt, da die Personen in der Grundbildung wahrscheinlich noch nicht mit viel Arbeitsstress umgehen müssen. Die Quote könnte aber aufgrund der Art der Messung (Stichproben) und weil junge Menschen eventuell unvorsichtiger in einer Beziehung sind, nicht nur durch die Arbeitsposition beeinflusst worden sein. Die nächsten höher liegenden Arbeitspositionen sind im Vergleich zu den unteren Positionen gesellschaftlich höher angesehen. Diese könnten da zu finden sein, weil Menschen mit genug Geld auch eher eine Familie gründen und Kinder unterstützen können.
+
+```{r, message=FALSE, echo=FALSE}
+# Funktion um Anzahl Kinder und Arbeitszeit zu verbinden
+join_worktime_data <- function(data){
+    return(
+      data %>% group_by(children_str) %>% count(name='Count') %>% 
+        left_join(
+          data %>% group_by(children_str) %>% dplyr::summarize(Mean = mean(TIMEWORKEDPERWEEKSUM)),
+          by = join_by(children_str)
+      )
+    )
+}
+
+# Führe Kinderzahl und Arbeitszeit zusammen
+worktime_combined <- zp_all_data %>% select(TIMEWORKEDPERWEEKSUM, SEX, AGE, HOUSEHOLDYEARLYID) %>%
+  full_join(hh_children, "HOUSEHOLDYEARLYID")
+worktime_combined <- worktime_combined %>%
+      mutate(children_str = case_when(
+          children_count == 1 ~ '1 Kind',
+          children_count == 2 ~ '2 Kinder',
+          children_count == 3 ~ '3 Kinder',
+          children_count > 3 ~ 'Mehr als 3 Kinder',
+          TRUE ~ 'Keine Kinder'
+      ))
+
+# Alle Daten
+mean_all_data <- join_worktime_data(
+  worktime_combined %>%
+  filter(TIMEWORKEDPERWEEKSUM >= 0)
+)
+# Nur Frauen
+mean_female <- join_worktime_data(
+  worktime_combined %>%
+  filter(SEX == 2) %>%
+  filter(TIMEWORKEDPERWEEKSUM >= 0)
+)
+# Nur Männer
+mean_male <- join_worktime_data(
+  worktime_combined %>%
+  filter(SEX == 1) %>%
+  filter(TIMEWORKEDPERWEEKSUM >= 0)
+)
+
+# Funktion, um die Arbeitsstunden und Kinderanzahl zu plotten
+barplot_worktime <- function(data, title_text, subtitle_text){
+  ggplot(data, aes(x=reorder(factor(children_str), Mean, .desc = TRUE), y=Mean, fill=Mean)) + 
+  geom_bar(stat = "identity") +
+  labs(
+    title=title_text,
+    subtitle=subtitle_text,
+    x="Anzahl Kinder",
+    y="Durchschnitt Arbeitszeit in h/Woche"
+  ) +
+  theme(axis.text.x = element_text(angle=40, hjust = 1), legend.position = "none")
+}
+```
+
+```{r, message=FALSE, echo=FALSE}
+# Erstelle Plot für alle Daten
+barplot_worktime(mean_all_data, "Arbeitszeit und Kinder", "alle Altersgruppen")
+```
+
+Bei der Grafik mit allen Daten zusammen ist noch nicht viel erkennbar. Werden jedoch die Geschlechter miteinander vergleicht, kann man einen Unterschied klar erkennen:
+
+```{r, message=FALSE, echo=FALSE}
+# Erstelle Plot für nur Frauen
+barplot_worktime(mean_female, "Arbeitszeit und Kinder", "Frauen")
+```
+
+```{r, message=FALSE, echo=FALSE}
+# Erstelle Plot für nur Männer
+barplot_worktime(mean_all_data, "Arbeitszeit und Kinder", "Männer")
+```
+
+Bei diesen Darstellungen sieht man schön, dass Frauen weniger Arbeiten je höher die Kinderanzahl im Vergleich zu Männern. Dies bestätigt unsere vorher aufgeführte Quelle, welche besagt, dass Frauen eher ihr Arbeitspensum reduzieren als Männer bei der Betreuung von Kindern.
+
+##### Ergebnisse
+
+Der Blick auf die Daten bestätigt die Hypothese, dass die Kinderzahl die Arbeitszeit vorallem bei Frauen beeinflusst. Ungekehrt kann keine genaue Schlussfolgerung gemacht werden.
+
+Eine Aussage bezüglich der Arbeitsposition kann nicht gemacht werden. Zwar haben die Menschen in der Grundbildung am meisten Kinder, aber ob dies nun wirklich an der Arbeitsposition liegt, kann nicht bestätigt werden.
+
+------------------------------------------------------------------------
+
+### Wie verteilt sich das Arbeitspensum im Zusammenhang mit Geschlecht, Familienstand und Kinderzahl?
+
+Teilweise wurde die Arbeitszeit in Zusammenhang mit der Kinderzahl schon untersucht, aber noch nicht mit dem eingetragenen Arbeitspensum. Basierend auf der Analyse der Arbeitszeit stellen wir die Hypothese auf, dass Frauen ein weniger beruflich beschäftigt sind als Männer. In diesem Abschnitt wird das Arbeitspensum im Zusammenhang mit Geschlecht, Familienstand und Kinderzahl genauer untersucht.
+
+Die ILOSTAT-Analyse zum Internationalen Tag der Familien beleuchtet, wie der Familienstand die Arbeitsmarktbeteiligung beeinflusst, insbesondere durch geschlechtsspezifische Normen. Sie zeigt, dass verheiratete Männer in der Regel eine höhere Erwerbsbeteiligung aufweisen als verheiratete Frauen. Im Gegensatz dazu sinkt die Erwerbsbeteiligung von Frauen mit Kindern stärker als bei Männern. Verheiratete Frauen sind häufiger von Unterbeschäftigung betroffen, arbeiten oft weniger Stunden als gewünscht und sind in der Regel weniger in Führungspositionen vertreten. Diese Muster verdeutlichen die anhaltende Wirkung traditioneller Geschlechterrollen auf die Arbeitsmarktchancen von Frauen. Die Daten unterstreichen die Notwendigkeit, geschlechtergerechte Arbeitsmarktpolitiken zu entwickeln, um diese Ungleichheiten zu verringern. [Quelle](https://ilostat.ilo.org/blog/international-day-of-families-how-marital-status-shapes-labour-market-outcomes/)
+
+Aus dieser Quelle lässt schliessen, dass das Arbeitsleben on Frauen stärker beeinflusst wird als das von Männern. Ob dies auch für die schweizer Bevölkerung gilt, wird mit den folgenden Visualisierungen untersucht.
+
+```{r, message=FALSE, echo=FALSE}
+# Wir verbinden die Personen- mit den Haushaltsdaten und erstellen Variablen für Kindergruppen, Familienstand, Geschlecht und Arbeitspensum
+daten <- zp_2021 %>%
+  inner_join(
+    hh_2021 %>% select(HOUSEHOLDYEARLYID,
+                  HH_COUNTOF00_04, HH_COUNTOF05_15, HH_COUNTOF16_19),
+    by = "HOUSEHOLDYEARLYID"
+  ) %>%
+  mutate(
+    # Gesamtzahl Kinder unter 20
+    HH_CHILDREN = HH_COUNTOF00_04 + HH_COUNTOF05_15 + HH_COUNTOF16_19,
+    Kindergruppe = case_when(
+      HH_CHILDREN == 0 ~ "Keine Kinder",
+      HH_CHILDREN == 1 ~ "1 Kind",
+      HH_CHILDREN == 2 ~ "2 Kinder",
+      HH_CHILDREN == 3 ~ "3 Kinder",
+      HH_CHILDREN >  3 ~ "Mehr als 3 Kinder",
+      TRUE            ~ NA_character_
+    ),
+    marital = case_when(
+      CLASSOFMARITALSTATUS == 2          ~ "Verheiratet / eingetr. Partnerschaft",
+      CLASSOFMARITALSTATUS %in% c(1,3,4) ~ "Alleinstehend",
+      TRUE                                ~ NA_character_
+    ),
+    SEX = factor(SEX, levels = c(1,2), labels = c("Männer", "Frauen")),
+    Status = factor(
+      ifelse(WORKSTATUS_LEGAL == 1, "Selbständig", "Unselbständig"),
+      levels = c("Selbständig", "Unselbständig")
+    ),
+    CURR_ACTIVITY = factor(
+      CURRACTIVITYSTATUSII,
+      levels = 1:4,
+      labels = c(
+        "Vollzeit (90–100%)",
+        "Teilzeit I (70–89%)",
+        "Teilzeit II (50–69%)",
+        "Teilzeit III (<50%)"
+      )
+    )
+  ) %>%
+  filter(!is.na(Kindergruppe), !is.na(marital)) %>%
+  mutate(
+    Kindergruppe = factor(
+      Kindergruppe,
+      levels = c("Keine Kinder", "1 Kind", "2 Kinder", "3 Kinder", "Mehr als 3 Kinder")
+    )
+  )
+```
+
+```{r, message=FALSE, echo=FALSE}
+# Prozentanteile nach Kombinationen berechnen
+daten_pensum <- daten %>%
+  group_by(SEX, marital, Kindergruppe, CURR_ACTIVITY) %>%
+  summarise(count = n(), .groups = 'drop') %>%
+  group_by(SEX, marital, Kindergruppe) %>%
+  mutate(percent = count / sum(count) * 100) %>%
+  ungroup()
+
+# Funktion für facettierte Plots
+plot_pensum <- function(sex_level, sex_label) {
+  ggplot(filter(daten_pensum, SEX == sex_level),
+         aes(x = Kindergruppe, y = percent, fill = CURR_ACTIVITY)) +
+    geom_col(position = "dodge") +
+    facet_wrap(~ marital,
+               labeller = labeller(marital = label_wrap_gen(width = 15))) +
+    labs(
+      title    = paste0("Arbeitspensum nach Kinderzahl & Familienstand (", sex_label, ")"),
+      x        = "Anzahl Kinder",
+      y        = "Anteil in %",
+      fill     = "Pensum"
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(
+      axis.text.x   = element_text(angle = 45, hjust = 1),
+      plot.margin   = margin(t = 10, r = 60, b = 10, l = 40),
+      strip.text    = element_text(size = 10),
+      plot.title    = element_text(hjust = 0.5)
+    ) +
+    coord_cartesian(clip = "off")
+}
+
+```
+
+```{r, message=FALSE, echo=FALSE}
+plot_pensum("Frauen", "Frauen")
+```
+
+##### Erkenntnisse Frauen
+
+**Alleinstehende Frauen:**
+
+-   Ohne Kinder dominieren Arbeitsverhältnisse mit sehr geringem Pensum (unter 50%).
+
+-   Mit zunehmender Kinderzahl verringert sich der Anteil sehr geringer Teilzeitarbeit (\<50%) leicht, während Teilzeitarbeit im Bereich 70–89% leicht zunimmt.
+
+-   Vollzeitstellen bleiben über alle Kategorien hinweg verhältnismässig konstant niedrig.
+
+
+**Verheiratete Frauen oder Frauen in einer eingetragenen Partnerschaft:**
+
+-   Bereits ohne Kinder besteht eine stärkere Verteilung über verschiedene Teilzeitstufen.
+
+-   Deutlicher wird, dass der Anteil an sehr geringer Teilzeitarbeit (\<50%) drastisch ansteigt, je mehr Kinder vorhanden sind. Insbesondere ab einem Kind überwiegen deutlich Teilzeit-Arbeitsverhältnisse mit niedrigen Pensum (\<50%).
+
+-   Der Anteil von Vollzeit arbeitenden Frauen sinkt erheblich mit der Anzahl der Kinder, insbesondere ab zwei Kindern.
+
+
+**Interpretation der Ergebnisse für Frauen:**
+
+Frauen in einer Partnerschaft passen ihr Arbeitspensum deutlich stärker an familiäre Anforderungen an. Mit zunehmender Anzahl der Kinder scheint eine klassische Rollenverteilung sichtbar zu werden, bei der Frauen vor allem Teilzeit arbeiten und deutlich mehr unbezahlte familiäre Care-Arbeit übernehmen. Alleinstehende Frauen zeigen eine höhere Flexibilität in Bezug auf ihre Arbeitszeiten und reduzieren ihr Pensum weniger stark, da sie vermutlich allein für den Haushaltseinkommen verantwortlich sind.
+
+```{r, message=FALSE, echo=FALSE}
+plot_pensum("Männer", "Männer")
+```
+
+##### Erkenntnisse Männer
+
+**Alleinstehende Männer**:
+
+-   Ohne Kinder überwiegt das Vollzeitpensum bereits deutlich mit rund 50%. Dennoch existiert ein bemerkenswerter Anteil an sehr geringer Teilzeitbeschäftigung (\<50%).
+
+-   Mit zunehmender Kinderzahl nimmt der Anteil der Vollzeitarbeit zu, während die sehr geringe Teilzeit (\<50%) tendenziell sinkt. Offenbar steigt der Druck, durch Vollzeitarbeit den Lebensunterhalt sicherzustellen, je mehr Kinder im Haushalt leben.
+
+**Verheiratete Männer oder Männer in einer eingetragenen Partnerschaft**:
+
+-   Vollzeitarbeit dominiert klar in allen Kategorien, mit Anteilen von über 75%. Bereits ab einem Kind liegt die Vollzeiterwerbsquote bei etwa 80% und bleibt weitgehend stabil, unabhängig von der Zahl der Kinder.
+
+-   Andere Arbeitspensen (alle Formen von Teilzeit) spielen hier eine klar untergeordnete Rolle.
+
+##### Fazit zu den Erkenntnissen für Frauen und Männer
+
+Die dargestellten Analysen zeigen eindrücklich, dass Geschlecht, Familienstand und die Anzahl der Kinder erhebliche Auswirkungen auf das Erwerbsverhalten in der Schweiz haben. Dabei werden traditionelle Rollenbilder besonders deutlich sichtbar:
+
+-   **Frauen** zeigen eine ausgeprägte Anpassung ihres Arbeitspensums, insbesondere in Partnerschaften. Je höher die Zahl der Kinder, desto stärker reduzieren sie ihr Pensum und übernehmen mehrheitlich Teilzeitstellen mit niedrigem Pensum. Alleinstehende Frauen arbeiten häufiger in höheren Teilzeitpensen und zeigen insgesamt mehr Diversität bei der Wahl ihres Pensums.
+
+-   **Männer** hingegen weisen unabhängig von Familienstand und Kinderzahl eine starke Tendenz zur Vollzeiterwerbstätigkeit auf. Vor allem verheiratete Männer arbeiten nahezu ausnahmslos Vollzeit und übernehmen klar die Rolle des Haupternährers. Auch alleinstehende Männer erhöhen tendenziell ihr Pensum auf Vollzeitniveau, sobald sie Verantwortung für Kinder tragen.
+
+Diese Muster bestätigen ein immer noch stark ausgeprägtes, traditionelles Rollenbild, bei dem Männer primär die finanzielle Verantwortung übernehmen, während Frauen ihr Erwerbsverhalten flexibel an familiäre Verpflichtungen anpassen. Die Ergebnisse verdeutlichen somit, dass Gleichstellungs- und Familienpolitik weiterhin wichtige Bereiche bleiben, in denen Handlungsbedarf besteht, um eine gleichmässigere Verteilung familiärer und beruflicher Aufgaben zwischen den Geschlechtern zu fördern.
+
+------------------------------------------------------------------------
+
+### Gibt es mehr alleinstehende oder verheiratete Männer und Frauen, die selbständig sind?
+
+Im folgenden Abschnitt wird weiter in die Thematik der Arbeit eingetaucht, genauer gesagt in Richtung Selbständigkeit von Menschen in Abhängigkeit mit dem Geschlecht und Familienstand.
+
+Eine Analyse der schweizer Bevölkerung des Bundesamts für Statistik aus dem Jahr 2021 liefert einige Hinweise zur Selbständigkeit: Demnach waren 11,8% der Mütter selbstständig erwerbend, was fast 4 Prozentpunkte mehr sind als bei Frauen ohne Kinder (8,1%). Bei Vätern lag der Anteil der Selbstständigen bei 15,8%, was ebenfalls über dem der kinderlosen Männer (11,7%) lag. Die Männer sind aber in beiden Fällen deutlich mehr als Slebständige tätig.
+[Quelle](https://www.swissstats.bfs.admin.ch/data/webviewer/appId/ch.admin.bfs.swissstat/article/issue220316532100-01/package)
+
+Diese Aussagen legen nahe, dass sowohl der Familienstand als auch Normen und Geschlecht signifikante Faktoren für die Entscheidung zur Selbstständigkeit und den Erfolg von Selbstständigen darstellen.
+
+Anhand von den Daten können nun Visualisierungen bezüglich diesen Aussagen gemacht werden:
+
+```{r, message=FALSE, echo=FALSE}
+# Anteil Selbständiger berechnen
+daten_status <- daten %>%
+  group_by(SEX, marital, Status) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  group_by(SEX, marital) %>%
+  mutate(Percent = Count / sum(Count) * 100) %>%
+  ungroup()
+
+# Plot
+ggplot(daten_status, aes(x = Status, y = Percent, fill = Status)) +
+  geom_col(width = 0.6) +
+  geom_text(aes(label = sprintf("%.1f%%", Percent)),
+            vjust = -0.8, size = 3) +
+  facet_grid(
+    marital ~ SEX,
+    labeller = labeller(
+      marital = label_wrap_gen(width = 15)  # bricht lange Labels in max. 15 Zeichen um
+    )
+  ) +
+  scale_y_continuous(
+    expand = expansion(mult = c(0, 0.15))      # etwas mehr Platz oben für die Labels
+  ) +
+  labs(
+    title    = "Anteil Selbständiger vs. Unselbständiger",
+    subtitle = "nach Geschlecht und Familienstand",
+    x        = NULL,
+    y        = "Anteil in %",
+    fill     = NULL
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    strip.text    = element_text(face = "bold"),
+    plot.title    = element_text(hjust = 0.5, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5),
+    legend.position = "none"
+  )
+```
+
+##### Erkenntnisse zur Selbständigkeit nach Geschlecht und Familienstand
+
+Die dargestellte Analyse zeigt deutlich, dass Selbständigkeit bei beiden Geschlechtern, unabhängig vom Familienstand, eher eine Ausnahme darstellt. Dennoch gibt es klare Unterschiede, die insbesondere durch Familienstand geprägt sind:
+
+- **Verheiratete Personen** (sowohl Männer als auch Frauen) entscheiden sich häufiger für eine selbständige Erwerbstätigkeit als Alleinstehende. Dieses Muster deutet darauf hin, dass eine Partnerschaft einen unterstützenden Rahmen bietet, der es Personen ermöglicht, das unternehmerische Risiko leichter einzugehen. Dabei übernimmt vermutlich oft ein Partner die Rolle des Haupternährers in einem sicheren Angestelltenverhältnis, während der andere die Möglichkeit erhält, unternehmerisch aktiv zu werden.
+
+- **Geschlechtsspezifisch** zeigt sich, dass Männer tendenziell etwas häufiger selbständig sind als Frauen, wobei dieser Unterschied nicht sehr gross ausfällt. Insgesamt bestätigt sich jedoch das traditionelle Bild, wonach Männer eher bereit sind, Risiken in einer selbständigen Tätigkeit einzugehen.
+
+Diese Ergebnisse weisen darauf hin, dass Selbständigkeit stark von der Lebenssituation und insbesondere von der Stabilität des familiären Hintergrunds beeinflusst wird. Daher können Massnahmen zur Förderung der Selbständigkeit besonders erfolgreich sein, wenn sie familiäre Strukturen und Partnerschaften berücksichtigen und entsprechend unterstützen.
+
+------------------------------------------------------------------------
+
+### Heiraten Paare wegen des Kindes?
+
+Früher galt die traditionelle Reihenfolge: zuerst heiraten, dann Kinder. Ob diese alte Denkweise noch überwinstimmt mit den Daten von heute, wird dieser Abschnitt behandeln.
+
+Der Gedanke liegt nahe das Paare heiraten wenn ein Kind auf dem Weg ist, denn die Geburt eines Kindes verändert vieles. Sie kann rechtliche Fragen aufwerfen, etwa zur gemeinsamen elterlichen Sorge, zum Namen oder zur Absicherung. Heiraten Paare also gerade in dieser Phase, um sich rechtlich oder gesellschaftlich abzusichern?
+
+Oder zeigt sich ein anderer Trend? Ist die Reihenfolge heute flexibler, und Kinder werden auch ohne vorherige Eheschliessung als normaler Teil des Familienlebens gesehen?
+
+Ein Bericht von swissinfo.ch deutet darauf hin, dass viele Paare in der Schweiz sich erst kurz vor der Geburt eines Kindes zur Heirat entscheiden. Die Eheschliessung erfolgt dabei nicht mehr lange vor einer Familiengründung, sondern häufig unmittelbar davor. Dieses Verhalten legt nahe, dass die Geburt eines Kindes für viele ein Auslöser ist, sich für die Ehe zu entscheiden und nicht umgekehrt. [Quelle](https://www.swissinfo.ch/ger/gesellschaft/oft-heiraten-schweizer-erst-kurz-vor-dem-kinderkriegen/37018678)
+
+Für die Analyse werden Daten aus dem Stand 2000 verwendet. Dabei wurde das Jahr der Eheschliessung mit dem Alter des jüngsten Kindes verglichen. Ziel war es, zu erkennen, ob es Hinweise auf Heiraten rund um die Geburt eines Kindes gibt.
+
+Die Ergebnisse zeigen interessante Entwicklungen, wie in folgender Analyse zu erkennen ist.
+
+```{r, message=FALSE, echo=FALSE}
+# Relevante Spalten für diese Fragestellung selektieren
+df_zivilstand <- haushalte_vz2000[colnames(haushalte_vz2000)[c(86,118,24:43,78)]]
+```
+
+```{r, message=FALSE, echo=FALSE}
+df_Kind <- df_zivilstand %>%
+  filter(H_RZIVL == 2) %>%                            # Nur verheiratete Personen
+  filter(if_all(everything(), ~ . >= 0)) %>%          # Nur valide Werte (keine -9, -6 etc.)
+  filter(!if_all(starts_with("H_AL"), ~ . == 0)) %>%  # Mind. ein Kindseintrag vorhanden
+  rename_with(
+    .cols = starts_with("H_AL"),
+    .fn = ~ {
+      alter <- as.numeric(str_extract(., "\\d{2}"))   # Letzte zwei Ziffern extrahieren
+      jahr <- 2000 - alter                            # Umrechnung in Geburtsjahr
+      as.character(jahr)
+    }
+  )
+```
+
+```{r, message=FALSE, echo=FALSE}
+# Ziel: Analyse der Verteilung von Kindergeburten nach Jahr
+# Basis: df_Kind enthält nur verheiratete Paare mit mindestens einem Kind
+# Wir zählen alle Einträge mit '1' in den Jahrgangsspalten (entspricht: Kind vorhanden)
+df_long <- df_Kind %>%
+  pivot_longer(
+    cols = as.character(1981:2000),       # Alle Spalten, die Kinderjahrgänge repräsentieren
+    names_to = "Jahr",                    # Neues Namensfeld für das Geburtsjahr
+    values_to = "Wert"                    # Werte (1 = Kind vorhanden, 0 = kein Kind)
+  ) %>%
+  filter(Wert == 1) %>%                   # Nur gültige Kind-Einträge zählen (Wert = 1)
+  group_by(Jahr) %>%                      # Gruppieren nach Geburtsjahr
+  summarise(Anzahl = n(), .groups = "drop")  # Anzahl Fälle pro Jahr berechnen
+
+# Visualisierung der Kinderverteilung nach Geburtsjahr
+ggplot(df_long, aes(x = Jahr, y = Anzahl)) +
+  geom_col(fill = "steelblue") +  # Balken mit farbigem Innenbereich und Rand
+  labs(
+    title = "Häufigkeit der Kinder nach Geburtsjahr (1981–2000)",
+    x = "Geburtsjahr",
+    y = "Anzahl Fälle"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))  # X-Achse drehbar für Lesbarkeit
+
+```
+
+Die Anzahl der Geburten steigt von 1981 bis etwa 1991 deutlich an. Den Höchstwert erreichen die Daten um das Jahr 1991 mit über 70'000 Fällen. Danach sinkt die Zahl wieder langsam ab und liegt im Jahr 2000 bei rund 60'000, ähnlich wie im Jahr 1981.
+
+Diese Entwicklung deutet auf eine Häufung von Geburten in den späten Achtziger- und frühen Neunzigerjahren hin. Sie bildet den zeitlichen Rahmen für unsere weitere Auswertung zur Frage, ob Heiraten häufig rund um die Geburt eines Kindes stattfinden.
+
+##### Zivilstandsänderungen im zeitlichen Verlauf
+
+Als Nächstes wurde das Jahr der letzten Zivilstandsänderung analysiert, mit Fokus auf Eheschliessungen. Die Daten stammen aus dem Stand 2000 und zeigen, in welchen Jahren besonders viele Veränderungen im Zivilstand registriert wurden.
+
+```{r, message=FALSE, echo=FALSE}
+# Ziel: Darstellung der Häufigkeit der letzten Zivilstandsänderung (z.B. Heirat) 
+# Basierend auf df_Kind (Paare mit mind. einem Kind)
+
+# Gruppierung und Zählung nach Jahr der letzten Zivilstandsänderung
+df_zivilstand <- df_Kind %>%
+  group_by(H_ZZIVJ) %>%                     # Gruppieren nach Jahr der letzten Zivilstandsänderung
+  summarise(Anzahl = n()) %>%                   # Anzahl der Fälle pro Jahr berechnen
+  filter(H_ZZIVJ >= 1960)
+
+# Visualisierung: Anzahl Zivilstandsänderungen pro Jahr
+ggplot(df_zivilstand, aes(x = as.factor(H_ZZIVJ), y = Anzahl)) +
+  geom_col(fill = "steelblue") +  # Balkendiagramm mit Farbe und Rand
+  labs(
+    title = "Häufigkeit der letzten Zivilstandsänderung",
+    x = "Jahr der letzten Zivilstandsänderung",
+    y = "Anzahl"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))  # Dreht Beschriftung der X-Achse für bessere Lesbarkeit
+```
+
+Die Auswertung zeigt: Bis etwa Mitte der 1960er-Jahre treten nur wenige Fälle auf. Ab den 1970er-Jahren steigt die Zahl der Zivilstandsänderungen deutlich an. Den Höchstwert erreichen die Daten zwischen 1995 und 2000, mit jeweils über 30'000 Fällen pro Jahr. Danach ist ein leichter Rückgang erkennbar.
+
+Diese Entwicklung lässt sich auf verschiedene Faktoren zurückführen. Einerseits könnten ältere Zivilstandsänderungen in den Daten weniger vollständig erfasst sein, etwa weil betroffene Personen nicht mehr im betrachteten Kollektiv enthalten sind. Andererseits könnte die Spitze in den späten 1990er-Jahren auf eine Phase besonders aktiver Heiratstätigkeit oder auf eine verbesserte Datenabdeckung zurückgehen.
+
+##### Ein genauer Blick auf das Heiratsjahr 1990
+
+Um den Zusammenhang zwischen Eheschliessung und Familiengründung noch genauer zu untersuchen, wurden gezielt Paare betrachtet, die im Jahr 1990 geheiratet haben. Für diese Gruppe wurde ausgewertet, wie viele Kinder in den Haushalten leben und in welchen Jahren diese geboren wurden.
+
+Ziel war es, zu erkennen, ob es eine Häufung von Geburten kurz nach der Heirat gibt oder ob Kinder bereits vor der Eheschliessung zur Welt kamen. Die zeitliche Verteilung der Geburtsjahre innerhalb dieser Teilgruppe erlaubt Rückschlüsse darauf, ob die Heirat eher vor oder nach dem ersten Kind erfolgte.
+
+Diese gezielte Analyse ermöglicht es, konkrete Beispiele für mögliche Muster sichtbar zu machen – etwa die klassische Reihenfolge Heirat und dann Kind oder umgekehrt. Die Ergebnisse zeigen, wie unterschiedlich Familienmodelle gelebt werden können, selbst innerhalb eines einzigen Heiratsjahrgangs.
+
+```{r, message=FALSE, echo=FALSE}
+# Daten filtern: Nur Paare mit Eheschliessung im Jahr 1990
+df_1990 <- df_Kind %>%
+  filter(H_ZZIVJ == 1990) %>%  # Nur Heiratsjahr 1990
+
+  # Umwandlung ins Long-Format: Spalten für Kinderjahrgänge werden zu Zeilen
+  pivot_longer(
+    cols = as.character(1981:2000),  # Kinderjahrgänge von 1981 bis 2000
+    names_to = "Jahr",               # Neue Spalte: Geburtsjahr
+    values_to = "Wert"               # Neue Spalte: 1 = Kind vorhanden
+  ) %>%
+
+  # Nur Einträge mit mindestens einem Kind (Wert == 1)
+  filter(Wert == 1) %>%
+
+  # Gruppierung nach Jahr, um Kinderhäufigkeit zu zählen
+  group_by(Jahr) %>%
+  summarise(Anzahl = n(), .groups = "drop")  # Anzahl Paare mit Kind im jeweiligen Jahr
+
+# Geburtsjahre als Faktor in chronologischer Reihenfolge
+df_1990$Jahr <- factor(df_1990$Jahr, levels = as.character(1981:2000))
+
+# Visualisierung: Kinderverteilung nach Geburtsjahr
+ggplot(df_1990, aes(x = Jahr, y = Anzahl)) +
+  geom_col(color = "black", fill = "orange") +  # Balken mit schwarzem Rand
+  labs(
+    title = "Kinderzahl nach Geburtsjahr – Paare, die 1990 geheiratet haben",
+    x = "Geburtsjahr des Kindes",
+    y = "Anzahl Paare"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),  # Leicht geneigte X-Achse
+    legend.position = "none"  # Keine Legende, da nur ein Wert (1) gezeigt wird
+  )
+```
+
+Die Ergebnisse zeigen deutlich: Im Jahr 1991 wurden am meisten Kinder geboren. Direkt nach der Eheschliessung kam es also bei vielen Paaren zur Familiengründung.
+
+Zwischen 1991 und 2000 nimmt die Anzahl der Geburten stetig ab. Das lässt darauf schliessen, dass viele Paare ihre Kinder in den ersten Jahren nach der Heirat bekommen haben und später keine weiteren hinzukamen.
+
+Auffällig ist auch, dass vor 1990, also in den Jahren 1981 bis 1989, kaum Kinder geboren wurden. Das deutet darauf hin, dass die meisten Paare zum Zeitpunkt der Eheschliessung noch keine gemeinsamen Kinder hatten.
+
+Die Analyse zeigt somit ein klares Muster: Viele Paare haben kurz nach der Heirat mit der Familiengründung begonnen. Das klassische Modell erst heiraten, dann Kinder ist in diesem Fall weit verbreitet.
+
+##### Kinderanzahl bei Paaren mit Heiratsjahr 1985
+
+Um zu überprüfen, ob sich das beobachtete Muster auch in anderen Jahrgängen zeigt, wurde dieselbe Analyse für Paare durchgeführt, die im Jahr 1985 geheiratet haben.
+
+```{r, message=FALSE, echo=FALSE}
+# Daten filtern: Nur Paare mit Eheschliessung im Jahr 1985
+df_1985 <- df_Kind %>%
+  filter(H_ZZIVJ == 1985) %>%  # Nur Heiratsjahr 1985
+
+  # Umwandlung ins Long-Format: Spalten für Kinderjahrgänge werden zu Zeilen
+  pivot_longer(
+    cols = as.character(1981:2000),  # Kinderjahrgänge von 1981 bis 2000
+    names_to = "Jahr",               # Neue Spalte: Geburtsjahr
+    values_to = "Wert"               # Neue Spalte: 1 = Kind vorhanden
+  ) %>%
+
+  # Nur Einträge mit mindestens einem Kind (Wert == 1)
+  filter(Wert == 1) %>%
+
+  # Gruppierung nach Jahr, um Kinderhäufigkeit zu zählen
+  group_by(Jahr) %>%
+  summarise(Anzahl = n(), .groups = "drop")  # Anzahl Paare mit Kind im jeweiligen Jahr
+
+# Geburtsjahre als Faktor in chronologischer Reihenfolge
+df_1985$Jahr <- factor(df_1985$Jahr, levels = as.character(1981:2000))
+
+# Visualisierung: Kinderverteilung nach Geburtsjahr
+ggplot(df_1985, aes(x = Jahr, y = Anzahl)) +
+  geom_col(color = "black", fill = "orange") +  # Balken mit schwarzem Rand
+  labs(
+    title = "Kinderzahl nach Geburtsjahr – Paare, die 1985 geheiratet haben",
+    x = "Geburtsjahr des Kindes",
+    y = "Anzahl Paare"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),  # Leicht geneigte X-Achse
+    legend.position = "none"  # Keine Legende, da nur ein Wert (1) gezeigt wird
+  )
+```
+
+Wie erwartet zeigt sich ein ähnliches Bild: Die meisten Kinder wurden kurz nach der Heirat geboren, vor allem in den Jahren 1986 bis 1991. Danach nimmt die Zahl der Geburten allmählich ab, was darauf hindeutet, dass viele Familien ihre Kinder in den ersten Jahren nach der Eheschliessung bekommen haben.
+
+Auch hier wurden vor der Heirat nur vereinzelt Kinder geboren, was bestätigt, dass die Mehrheit der Paare erst nach der Eheschliessung mit der Familiengründung begonnen hat.
+
+Diese Wiederholung des Musters deutet darauf hin, dass es sich nicht um eine Ausnahme handelt, sondern um eine verbreitete Abfolge: Heirat, dann Kinder, meist in den ersten Jahren danach.
+
+##### Fazit zur Verbindung von Heirat und Geburt
+
+Die Analysen zeigen deutlich: In den meisten Fällen fand die Heirat vor der Geburt der Kinder statt. Sowohl bei Paaren, die 1985 als auch bei solchen, die 1990 geheiratet haben, wurden die meisten Kinder ein bis wenige Jahre nach der Eheschliessung geboren.
+
+Kinder, die vor der Heirat zur Welt kamen, waren nur vereinzelt vertreten. Das spricht dafür, dass die klassische Reihenfolge zuerst heiraten, dann Kinder in der Schweiz im betrachteten Zeitraum weit verbreitet war.
+
+Die wiederkehrenden Muster in verschiedenen Heiratsjahrgängen deuten darauf hin, dass sich dieses Familienmodell über die Jahre hinweg recht stabil gehalten hat.
+
+------------------------------------------------------------------------
+
+### Gedankenschluss
+
+Die Ergebnisse der jeweiligen Fragestellungen verdeutlichen, dass Partnerschaften in der Schweiz vielfältig sind, dennoch aber erkennbare Muster aufweisen. Daten helfen, Annahmen zu hinterfragen und gesellschaftliche Trends besser zu verstehen. Sie zeigen Veränderungen und wiederkehrende Muster im Laufe des Lebens.
+
+Für uns war es spannend zu sehen, wie viel über Beziehungen sichtbar wird, wenn man sie statistisch betrachtet. Persönlich und gesellschaftlich bleibt das Thema aktuell, und die Daten bieten wertvolle Denkanstösse.
+
+Dies waren nur sechs von vielen weiteren Fragen, die wir uns während der Demografie-Challenge gestellt haben. Jede Frage wirft neue Perspektiven auf, jeder Datensatz birgt unerwartete Einsichten. Auch wenn wir nie alle Antworten finden werden, so bringt uns jede Analyse ein Stück näher an das Verständnis komplexer Zusammenhänge und genau darin liegt der Reiz dieser unendlichen Datenwelt.
+

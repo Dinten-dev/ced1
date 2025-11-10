@@ -1,0 +1,1 @@
+zp_2021 <- read.csv("../data/strukturerhebung/2021_SE_RS_CSV/zp_2021.csv", header=TRUE, sep=";")

@@ -1,0 +1,256 @@
+---
+title: "Fragenstellung 9"
+output: html_document
+---
+```{r}
+library(ggplot2)
+library(dplyr)
+library(reshape)
+library(ggpubr)
+
+source('../scripts/all_zp_data.R')
+```
+
+```{r}
+# bind all data since 2015 (Codes diff before that)
+all_data <- zp_2015 %>%
+  bind_rows(zp_2016) %>%
+  bind_rows(zp_2017) %>%
+  bind_rows(zp_2018) %>%
+  bind_rows(zp_2019) %>%
+  bind_rows(zp_2020) %>%
+  bind_rows(zp_2021)
+```
+
+### Fragestellung:
+### Trennen sich Paare eher, wenn die Arbeitsposition tiefer ist? Trennen sich Paare eher, wenn die Arbeitszeit höher ist?
+
+Das Bundesamt für Statistik stellt eine Grafik für die Scheidungsrate zwischen 1950 bis 2023 der Schweiz zur verfügung. Ab dem Jahr 1970 steigt die Rate stetig bis auf 50%. Ca. bei 1998 sinkt sie rapide unter 30% bis sie im Jahr 2000 wieder noch oben schiesst über 50%. Seit 2010 verweilt die Scheidungsrate auf 40%.
+
+Mit den Daten, welche uns vom Bundesamt für Statistik zur Verfügung gestellt hat. können wir nun analysieren, welche Faktoren die Trennungen bei Paaren beeinflusst oder gar verursacht haben. Die folgenden Abschnitte behandeln mögliche Faktoren und deren Untersuchungen.
+
+
+#### Paare trennen sich eher, wenn die Arbeitsposition tiefer ist
+Externe Quellen sagen nein, es ist genau umgekehrt. Die Autoren des Manuskripts “Booms, Bust and Divorce” fassten viele Studien, Bücher und andere Quellen zusammen und kamen zur Schlussfolgerung, dass Trennungen prozyklisch ist. Dies bedeutet sobald die Wirtschaft gut läuft, trennen sich Menschen eher. Das Manuskript beschreibt, dass eine Scheidung teuer ist und Menschen in schlechten Zeiten aufeinander angewiesen sind. In guten Zeiten kann man sich eine grosse Lebensentscheidung leisten.
+(https://pmc.ncbi.nlm.nih.gov/articles/PMC4159954/)
+
+Eine andere Quelle besagt, dass Menschen mit mehr Geld eher einen Seitensprung wagen als die ohne und so die Beziehung gefährden. 
+Der Artikel beschreibt mehrere Gründe weswegen eine Ehe bei wohlhabenden Menschen eher scheitert. Die Abwesenheit eines erfolgreichen Partners, ungleiche Machtverhältnisse, Streit über wie man Geld ausgibt (mehr Geld mehr Diskussionsmöglichkeiten), Vertrauensmangel von vergangenen Affären, eine mangelnde Moral basierend auf hohe Ansprüche, weniger Flexibilität und Empathie in der Beziehung und Narzissmus sind alles Gründe, die eine Scheidung (vermehrt bei Menschen mit viel Geld) verursachen können.
+(https://caldaclinic.com/de/how-wealth-complicates-a-marriage-break-up-and-impacts-mental-health/)
+
+Diese neue Erkenntnisse versuchen wir nun in unseren Daten wiederzuspiegeln. Die folgende Grafik zeigt die Anzahl getrennter Personen von den zusammengefassten Daten seit Jahr 2010 bis Jahr 2021.
+(getrennte Personen = geschieden und aufgelöste Partnerschaft)
+
+```{r}
+positions_count <- all_data %>%
+  filter(STATUSINEMPL_DETAIL >= 0) %>%
+  select(STATUSINEMPL_DETAIL) %>%
+  group_by(STATUSINEMPL_DETAIL) %>%
+  count(name='Count') %>%
+  mutate(statusinempl_detail_str = case_when((STATUSINEMPL_DETAIL == 11) ~ '11 Selbständige mit Angestellten (keine AG oder GmbH)',
+                                     (STATUSINEMPL_DETAIL == 12) ~ '12 Selbständige ohne Angestellte (keine AG oder GmbH)',
+                                     (STATUSINEMPL_DETAIL == 20) ~ '20 Mitarbeitende Familienmitglieder',
+                                     (STATUSINEMPL_DETAIL == 31) ~ '31 Firmeneigentümer/-innen (AG oder GmbH) mit Angestellten',
+                                     (STATUSINEMPL_DETAIL == 32) ~ '32 Firmeneigentümer/-innen (AG oder GmbH) ohne Angestellte',
+                                     (STATUSINEMPL_DETAIL == 41) ~ '41 Direktoren/-innen oder Direktionsmitglieder',
+                                     (STATUSINEMPL_DETAIL == 42) ~ '42 Angestellte mit Vorgesetztenfunktion',
+                                     (STATUSINEMPL_DETAIL == 43) ~ '43 Angestellte ohne Vorgesetztenfunktion',
+                                     (STATUSINEMPL_DETAIL == 50) ~ '50 Lernende in der dualen beruflichen Grundbildung',
+                                     (STATUSINEMPL_DETAIL == 60) ~ '60 Erwerbslose',
+                                     (STATUSINEMPL_DETAIL == 70) ~ '70 Nichterwerbspersonen',
+                                      TRUE ~ NA))
+positions_seperated_count <- all_data %>%
+  filter(STATUSINEMPL_DETAIL >= 0 & (MARITALSTATUS == 4 | MARITALSTATUS == 7)) %>%
+  select(STATUSINEMPL_DETAIL) %>%
+  group_by(STATUSINEMPL_DETAIL) %>%
+  count(name='Seperated')
+
+melted<-melt(
+  data.frame(p=positions_count$statusinempl_detail_str,alle=positions_count$Count,getrennt=positions_seperated_count$Seperated),
+  id="p"
+)
+
+ggplot(melted,aes(x=p,y=value,fill=variable)) + 
+  geom_bar(stat="identity",position="dodge", alpha=.3) +
+  geom_text(
+    aes(x = p, y = value, label = value, group = variable), 
+    hjust = -0.1, size = 2,
+    position = position_dodge(width = 1),
+    inherit.aes = TRUE
+  ) +
+  scale_x_discrete(labels = label_wrap_gen(width=40)) +
+  coord_flip() +
+  labs(
+    title="Anzahl Trennungen pro Arbeitsposition",
+    x="Arbeitsposition",
+    y="Anzahl Personen",
+    fill="Zivilstand",
+  ) +
+  ylim(NA, 750000) + 
+  theme_classic() +
+  scale_y_continuous(name="Anzahl Personen", labels = scales::comma)
+```
+Wie man sieht sind die Anzahl Personen pro Arbeitsposition sehr unterschiedlich. Am höchten sind die Anzahl Trennungen bei den "Nichterwerbspersonen" und "Angestellt ohne Vorgesetztenfunktion", welche beide auch eine hohe Gesamtanzahl an Personen haben.
+
+Weil die Unterschiede in den Zahlen zwischen den Arbeitspositionen extrem variieren, setzen wir die Anzahl Personen in Relation mit den getrennten Personen und vergleichen die Quote damit. Folgende Grafik beschreibt die Anzahl getrennten Personen pro Arbeitsposition in Relation zu nicht getrennten Personen in Prozent.
+```{r}
+df_percentages <- left_join(positions_count, positions_seperated_count, by=join_by(STATUSINEMPL_DETAIL)) %>%
+  mutate(percentage = round(Seperated / Count * 100, digits = 2))
+
+ggplot(df_percentages, aes(reorder(factor(statusinempl_detail_str), percentage, .desc = TRUE), y=percentage, fill = percentage)) + 
+  geom_bar(stat = "identity") +
+  labs(
+    title="Prozent von Trennungen pro Arbeitsposition",
+    x="Arbeitsposition",
+    y="Prozent getrennt"
+  ) +
+  coord_flip() +
+  geom_text(
+    aes(x = statusinempl_detail_str, y = percentage, label = paste0(percentage, '%')), 
+    hjust = -0.1, size = 4,
+    position = position_dodge(width = 1),
+    inherit.aes = TRUE
+  ) +
+  ylim(NA, 20) +
+  theme_classic() +
+  theme(legend.position = "none")
+```
+
+Auf dieser Grafik können wir festhalten, dass in Relation zu gesamten Anzahl Personen von einer Arbeitsposition, die Menschen die "Selbständig ohne Angestellte" oder "Firmeneigentümer/-innen ohne Angestellte" sind, prozentual am Meisten sich von ihren Partnern trennen. Der Rest befindet sich bei einer ~10% Trennrate und am Wenigsten trennen sich Lernende in der dualen beruflichen Grundbildung. (TODO: maybe add graph to show it's unmarried younger people)
+
+Mit diesen Visualisierungen können wir nun sehen, dass unsere Annahme: "Paare trennen sich eher, wenn die Arbeitsposition tiefer ist" in den Daten nicht ersichtlich ist. Auch die ungekehrte Aussgae, die wir aus externer Researche gefunden haben, kann nicht bewiesen werden. Die höchsten Anzahl Trennungen und der in Relation gesetzte Prozentsatz ist nicht gross aussagend, da erstens nicht eindeutig alle besser gestellten Arbeitspositionen höhere Zahlen aufweisen und zweitens wir keine über mehrere Jahre übergreifende Daten haben. Somit können wir auch mit eindeutigeren Zahlen den wirklichen Trennungsgrund NICHT ausfindig machen können.
+
+
+#### Paare trennen sich eher, wenn die Arbeitszeit höher ist
+Laut dem Psychotherapeuten Bryan E. Robinson haben Workaholics Schwierigkeiten in Beziehungen. In seinem Buch beschreibt er, wie Workaholics Familienereignisse kurz halten oder gar nicht auftauchen. Bei nicht berufsbezogenen Aktivitäten sind sie gedanklich abwesend und warten auf Telefonanrufe von ihren Mitarbeitern. Ähnlich wie bei einer Alkoholsucht beginnen sie, den Laptop oder das Telefon zu verstecken und im Heimlichen zu arbeiten, um keine Auseinandersetzung mit dem Partner anzuzetteln.
+(https://www.psychologytoday.com/us/blog/the-right-mindset/202007/i-only-work-on-days-that-end-in-y)
+(Robinson, B. E. (2019). #Chill: Turn Off Your Job And Turn On Your Life. New York: William Morrow)
+
+```{r}
+# gathering mean and count for worktime in this function
+join_worktime_data <- function(data){
+    return(
+      left_join(
+        data %>% group_by(MARITALSTATUS) %>% count(name='Count'),
+        data %>% group_by(MARITALSTATUS) %>% dplyr::summarize(Mean = mean(TIMEWORKEDPERWEEKSUM)),
+        by = join_by(MARITALSTATUS)
+      ) %>%
+        mutate(martialstatus_str = case_when((MARITALSTATUS == 1) ~ 'Ledig',
+                                     (MARITALSTATUS == 2) ~ 'Verheiratet',
+                                     (MARITALSTATUS == 3) ~ 'Verwitwet',
+                                     (MARITALSTATUS == 4) ~ 'Geschieden',
+                                     (MARITALSTATUS == 5) ~ 'Unverheiratet',
+                                     (MARITALSTATUS == 6) ~ 'In eingetragener Partnerschaft',
+                                     (MARITALSTATUS == 7) ~ 'Aufgelöste Partnerschaft',
+                                      TRUE ~ NA))
+    )
+}
+
+mean_all_data <- join_worktime_data(
+  all_data %>%
+  filter(TIMEWORKEDPERWEEKSUM >= 0 & MARITALSTATUS > 0)
+)
+mean_between_18_30 <- join_worktime_data(
+  all_data %>%
+  filter(AGE >= 18 & AGE < 30) %>%
+  filter(TIMEWORKEDPERWEEKSUM >= 0 & MARITALSTATUS > 0)
+)
+mean_between_30_50 <- join_worktime_data(
+  all_data %>%
+  filter(AGE >= 30 & AGE < 50) %>%
+  filter(TIMEWORKEDPERWEEKSUM >= 0 & MARITALSTATUS > 0)
+)
+mean_between_50_70 <- join_worktime_data(
+  all_data %>%
+  filter(AGE >= 50 & AGE < 70) %>%
+  filter(TIMEWORKEDPERWEEKSUM >= 0 & MARITALSTATUS > 0)
+)
+mean_above_60 <- join_worktime_data(
+  all_data %>%
+  filter(AGE >= 60) %>%
+  filter(TIMEWORKEDPERWEEKSUM >= 0 & MARITALSTATUS > 0)
+)
+mean_between_18_60 <- join_worktime_data(
+  all_data %>%
+  filter(AGE >= 18 & AGE < 60) %>%
+  filter(TIMEWORKEDPERWEEKSUM >= 0 & MARITALSTATUS > 0)
+)
+
+unemployed <- all_data %>%
+  filter(STATUSINEMPL_DETAIL == 60)
+not_working <- all_data %>%
+  filter(STATUSINEMPL_DETAIL == 70)
+
+mean_all_female <- join_worktime_data(
+  all_data %>%
+  filter(TIMEWORKEDPERWEEKSUM >= 0 & MARITALSTATUS > 0) %>%
+  filter(SEX == 2)
+)
+
+mean_all_male <- join_worktime_data(
+  all_data %>%
+  filter(TIMEWORKEDPERWEEKSUM >= 0 & MARITALSTATUS > 0) %>%
+  filter(SEX == 1)
+)
+```
+
+Nun möchten wir dies mit unseren Daten beweisen. Dazu erstellen wir erstmals eine Übersicht von der durchschnittlichen Arbeitszeit für die verschiedenen Zivilstände.
+
+```{r}
+barplot_worktime <- function(data, title_text, subtitle_text){
+  ggplot(data, aes(x=reorder(factor(martialstatus_str), Mean, .desc = TRUE), y=Mean, fill=Mean)) + 
+  geom_bar(stat = "identity") +
+  labs(
+    title=title_text,
+    subtitle=subtitle_text,
+    x="Zivilstand",
+    y="Durchschnitt Arbeitszeit in h/Woche"
+  ) +
+  theme(axis.text.x = element_text(angle=40, hjust = 1), legend.position = "none")
+}
+barplot_worktime_small <- function(data, subtitle_text){
+  ggplot(data, aes(x=reorder(factor(martialstatus_str), Mean, .desc = TRUE), y=Mean, fill=Mean)) + 
+  geom_bar(stat = "identity") +
+  labs(subtitle=subtitle_text,) +
+  theme(
+    axis.text.x = element_text(angle=40, hjust = 1),
+    axis.title.y=element_blank(),
+    legend.position = "none",
+    aspect.ratio=8/8,
+    plot.subtitle=element_text(size=8)
+  ) +
+  ylim(0, 40)
+}
+```
+
+Es folgt eine Grafik die alle Zivilstände und die durchschnittliche Arbeitszeit darstellt.
+```{r}
+barplot_worktime(mean_all_data, "Arbeitszeit und Zivilstand", "alle Altersgruppen")
+```
+Die Menschen, die aus einer aufgelösten Partnerschaft kommen, arbeiten am Meisten. Jedoch finden wir geschiedene Menschen erst an vierter Stelle. Die nächste Grafik umfasst alle Menschen zwischen 18 und 60 Jahren, um die Menschen auszuschliessen, die eventuell mit 0 Arbeitstunden die Zahlen stark beeinflussen.
+
+```{r}
+barplot_worktime(mean_between_18_60, "Arbeitszeit und Zivilstand", "Menschen von 18 bis 60 Jahren")
+```
+Wie man sieht, ist das Ergebniss fast das gleiche. Die Menschen aus einer aufgelösten Partnerschaft sind immer noch auf Platz 1 und die geschiedenen Personen sind auf der vierten Position. Um eine noch genauere Vorstellung der Arbeitszeiten pro Zivilstand zu bekommen, unterteilen wir nun die Altersgruppen und erstellen Grafiken pro Gruppe.
+
+```{r}
+bp_18_30 <- barplot_worktime_small(mean_between_18_30, "Menschen von 18 bis 30 Jahren")
+bp_30_50 <- barplot_worktime_small(mean_between_30_50, "Menschen von 30 bis 50 Jahren")
+bp_50_70 <- barplot_worktime_small(mean_between_50_70, "Menschen von 50 bis 70 Jahren")
+bp_60 <- barplot_worktime_small(mean_above_60, "Menschen über 60 Jahre")
+
+ggarrange(bp_18_30, bp_30_50, bp_50_70, bp_60, ncol = 4, nrow = 1)
+```
+Hier können wir sehen, das die drei Zivilstände mit den meisten Arbeitsstunden immer die gleichen sind egal welches Alter die Personen haben. Ab 60 Jahren werden die Arbeitstunden natürlich weniger.
+Bei dieser Untersuchung wäre es auch interessant gewesen, zu wissen, ob zB. die Arbeitstunden zunehmen vor einer Trennung. Das können wir mit einzelnen Stichproben wie hier jedoch nicht vornehmen.
+
+Die Daten sind jedes Jahr neue Stichproben, heisst es können keine Schlussfolgerungen gemacht werden über die Veränderungen von Faktoren und der exakte Trennungsgrund über mehrere Jahre für beide dieser Thesen. Trotzdem konnten wir uns einen groben Überblick über die Thematik verschaffen.
+
+
+````{r}
+# sex comparison for fun
+barplot_worktime(mean_all_female, "Arbeitszeit und Zivilstand", "Frauen")
+barplot_worktime(mean_all_male, "Arbeitszeit und Zivilstand", "Männer")
+````
+
